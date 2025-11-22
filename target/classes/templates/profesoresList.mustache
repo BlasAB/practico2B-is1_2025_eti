@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lista de Profesores</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen p-4">
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-8">Lista de Profesores Registrados</h1>
+
+        {{#profesores}}
+        <div class="bg-white rounded-lg shadow-md p-6 mb-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <h2 class="text-xl font-semibold text-gray-800">{{nombre}} {{apellido}}</h2>
+                    <p class="text-gray-600">{{correo}}</p>
+                </div>
+                <div class="text-right">
+                    <p class="text-gray-700"><span class="font-medium">DNI:</span> {{dni}}</p>
+                </div>
+            </div>
+        </div>
+        {{/profesores}}
+
+        {{^profesores}}
+        <div class="bg-white rounded-lg shadow-md p-8 text-center">
+            <p class="text-gray-600 text-lg">No hay profesores registrados.</p>
+        </div>
+        {{/profesores}}
+
+        <div class="mt-8 text-center space-y-4">
+            <a href="/profesor/registrar" 
+               class="inline-block bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition duration-200 font-medium">
+                Registrar Nuevo Profesor
+            </a>
+            <br>
+            <a href="/" 
+               class="inline-block bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 transition duration-200 font-medium">
+                Volver al Inicio
+            </a>
+        </div>
+    </div>
+</body>
+</html>

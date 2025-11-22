@@ -2,6 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Crear una cuenta</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
@@ -33,11 +34,19 @@
                        class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
             </div>
             <button type="submit"
-                    class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                    class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition duration-200">
                 Registrar Usuario
             </button>
-            <div class="text-center mt-4">
-                <a href="/" class="text-blue-600 hover:underline text-sm">Volver al inicio</a>
+            
+            <!-- Bloque de enlaces debajo del formulario -->
+            <div class="text-center mt-4 space-y-2">
+                <!-- Enlace que devuelve al usuario a la página principal ("/") -->
+                <a href="/" class="text-blue-600 hover:underline text-sm block">Volver al inicio</a>
+                
+                <!-- Enlace adicional pensado para profesores: 
+                     redirige al formulario de registro de profesor en la ruta "/profesor/registrar".
+                     Se muestra en verde para diferenciarlo del enlace de usuario -->
+                <a href="/profesor/registrar" class="text-green-600 hover:underline text-sm block">¿Sos profesor? Registrate acá</a> 
             </div>
         </form>
     </div>

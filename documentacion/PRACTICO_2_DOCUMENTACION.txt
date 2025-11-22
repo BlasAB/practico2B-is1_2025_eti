@@ -1,0 +1,3 @@
+-El patrón de diseño identificado es Singleton
+-El patron de diseño se aplica específicamente en esta linea: "DBConfigSingleton dbConfig = DBConfigSingleton.getInstance();" y se aplica llamando a la clase DBConfigSingleton para la creación de una instancia única de esta clase, la cual crea la configuración de la Base de Datos.
+-El problema que resuelve es el de que se creen distintas configuraciones para la DB, además da la ventaja de que en caso de cambiar de DB, solo se debe modificar la ruta
