@@ -1,0 +1,69 @@
+# Proyecto integrador: Especificación, Gestión y planificación
+
+## 1. Descripción del proyecto
+
+### Problema que resuelve
+Gestión de datos académicos: inscripciones, notas y comunicación entre alumnos y profesores.
+
+### Usuarios del sistema
+- **Alumnos**: pueden inscribirse a materias, inscribirse a rendir, consultar notas y comunicarse con profesores.
+- **Profesores**: pueden ver listas de estudiantes, cargar notas y enviar/recibir mensajes internos.
+
+### Funcionalidades principales
+- Inscripción de materias
+- Inscripción a rendir
+- Lista de estudiantes por profesor
+- Mensajería interna (profesor ↔ alumno)
+- Carga de notas
+
+### Restricciones técnicas
+- El proyecto debe ejecutarse en notebooks con 4GB de RAM.  
+- Se utilizará **Java** con el framework **Spark** y el ORM **ActiveJDBC**.  
+- La base de datos será **SQLite** por simplicidad y compatibilidad.  
+- El motor de plantillas será **Mustache**.  
+- El equipo cuenta con conocimientos básicos de Spark y ActiveJDBC, por lo que se descartan frameworks más complejos como Spring.
+
+### Tamaño del equipo
+5 integrantes.
+
+### Tecnologías y especificaciones
+- Lenguaje: Java  
+- Framework web: Spark  
+- ORM: ActiveJDBC  
+- Motor de plantillas: Mustache  
+- Base de datos: SQLite  
+- Control de versiones: GitHub  
+
+### Plazo estimado
+A definir según la planificación del equipo.
+
+### Cambios de alcance ocurridos
+Inicialmente se habían considerado funcionalidades como **foro de opinión** y **pago de cooperadora**, pero se descartaron por su complejidad y baja conveniencia en un escenario ficticio.  
+En su lugar, se incorporó **mensajería interna** como alternativa más simple y útil.
+
+### Problemas encontrados
+- Curva de aprendizaje en ActiveJDBC y Spark.  
+- Limitaciones de hardware (4GB RAM) que obligan a usar herramientas livianas.  
+- Necesidad de definir claramente permisos y roles (ejemplo: solo profesores pueden cargar notas).  
+
+### Forma de organización del equipo
+El equipo trabajará con una **estructura horizontal**: todos los integrantes tienen la misma jerarquía.  
+Se aplicará una metodología ágil (Scrum básico), con reuniones semanales para revisar avances y asignar tareas.  
+Cada miembro será responsable de una parte del sistema, pero las decisiones se tomarán en conjunto.
+
+---
+
+## 2. Auditoría de riesgos
+
+| Tipo de Riesgo   | Descripción                                                   | Probabilidad | Impacto  | Identificado por |
+|------------------|---------------------------------------------------------------|--------------|----------|------------------|
+| Técnico          | Curva de aprendizaje en ActiveJDBC y Spark.                   | Media        | Alto     | IA       	    |
+| Técnico          | Poco conocimiento en la herramienta GitHub.                   | Media        | Alto     | Equipo           |
+| Técnico          | Acceso sin autorización al sistema (riesgo de seguridad).     | Media        | Crítico  | Equipo      	    |
+| Organizacional   | Falta de coordinación en la asignación de funcionalidades.    | Media        | Medio    | IA               |
+| Organizacional   | Todos los integrantes con misma jerarquía → riesgo de bloqueos 
+|		           | en decisiones. 						                       |Baja          | Alto     | Equipo 	        |
+| Organizacional   | Dificultad para entender el código entre miembros del grupo.  | Media        | Alto     | Equipo           |
+| Planificación    | Subestimación del tiempo para implementar mensajería interna. | Media        | Alto     | IA               |
+| Planificación    | Subestimación de plazos generales del proyecto.               | Alta         | Crítico  | Equipo           |
+| Humano           | Diferencias en nivel de conocimientos con los requeridos.     | Media        | Alto     | Equipo           |
