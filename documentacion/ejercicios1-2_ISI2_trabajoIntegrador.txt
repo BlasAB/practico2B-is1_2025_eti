@@ -19,12 +19,8 @@ Que solamente aparezcan las de tu carrera
 Que se diferencien los regulares y los libres
 Que sea por tiempo limitado (2 dias aproximadamente)
 
-
 - Lista de estudiantes por profesor:
 Que sea diferenciados por materias que dicta el profesor, comisiones y ordenados alfabeticamente
-
-- Mensajería interna (profesor ↔ alumno):
-Comunicacion directa entre alumno y profesor dentro del sistema. Permite enviar y recibir mensajes sin necesidad de correos externos.
 
 - Carga de notas:
 Los profesores pueden registrar las calificaciones de los alumnos en cada materia o examen. El sistema guarda las notas y las pone a disposición de los estudiantes en su perfil.
