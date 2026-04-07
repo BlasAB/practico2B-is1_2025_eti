@@ -24,9 +24,25 @@ Que sea por tiempo limitado (2 dias aproximadamente)
 Que sea diferenciados por materias que dicta el profesor, comisiones y ordenados alfabeticamente
 
 - Mensajería interna (profesor ↔ alumno):
+Comunicacion directa entre alumno y profesor dentro del sistema. Permite enviar y recibir mensajes sin necesidad de correos externos.
 
+- Carga de notas:
+Los profesores pueden registrar las calificaciones de los alumnos en cada materia o examen. El sistema guarda las notas y las pone a disposición de los estudiantes en su perfil.
 
-- Carga de notas
+- Gestión de materias 
+Los administradores o profesores pueden dar de alta nuevas materias, modificarlas o eliminarlas.
+
+-Calendario de exámenes 
+Publica las fechas de parciales y finales. Los alumnos pueden consultarlo en cualquier momento.
+
+-Gestión de usuarios (ABM)  
+Permite dar de alta, modificar o eliminar alumnos y profesores.
+
+-Consulta plan de estudio
+Se puede consultar el plan de estudio de cualquier carrera en cualquier momento.
+
+-Buscador interno  
+Permite buscar materias y/o profesores
 
 ### Restricciones técnicas
 - El proyecto debe ejecutarse en notebooks con 4GB de RAM.  
