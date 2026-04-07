@@ -10,10 +10,22 @@ Gestión de datos académicos: inscripciones, notas y comunicación entre alumno
 - **Profesores**: pueden ver listas de estudiantes, cargar notas y enviar/recibir mensajes internos.
 
 ### Funcionalidades principales
-- Inscripción de materias
-- Inscripción a rendir
-- Lista de estudiantes por profesor
-- Mensajería interna (profesor ↔ alumno)
+- Inscripción de materias: 
+Tener en cuenta materias correlativas
+Que sea por un tiempo limitado (1 semana aproximadamente)
+Que solamente aparezcan las de tu carrera
+
+- Inscripción a rendir:
+Que se diferencien los regulares y los libres
+Que sea por tiempo limitado (2 dias aproximadamente)
+
+
+- Lista de estudiantes por profesor:
+Que sea diferenciados por materias que dicta el profesor, comisiones y ordenados alfabeticamente
+
+- Mensajería interna (profesor ↔ alumno):
+
+
 - Carga de notas
 
 ### Restricciones técnicas
