@@ -1,25 +1,27 @@
 package com.is1.proyecto; // Define el paquete de la aplicación, debe coincidir con la estructura de carpetas.
 
 // Importaciones necesarias para la aplicación Spark
-import com.fasterxml.jackson.databind.ObjectMapper; // Utilidad para serializar/deserializar objetos Java a/desde JSON.
-import static spark.Spark.*; // Importa los métodos estáticos principales de Spark (get, post, before, after, etc.).
+import java.util.HashMap; // Utilidad para serializar/deserializar objetos Java a/desde JSON.
+import java.util.List;
+import java.util.Map; // Importa los métodos estáticos principales de Spark (get, post, before, after, etc.).
 
-// Importaciones específicas para ActiveJDBC (ORM para la base de datos)
 import org.javalite.activejdbc.Base; // Clase central de ActiveJDBC para gestionar la conexión a la base de datos.
 import org.mindrot.jbcrypt.BCrypt; // Utilidad para hashear y verificar contraseñas de forma segura.
 
-// Importaciones de Spark para renderizado de plantillas
-import spark.ModelAndView; // Representa un modelo de datos y el nombre de la vista a renderizar.
-import spark.template.mustache.MustacheTemplateEngine; // Motor de plantillas Mustache para Spark.
+import com.fasterxml.jackson.databind.ObjectMapper; // Representa un modelo de datos y el nombre de la vista a renderizar.
+import com.is1.proyecto.config.DBConfigSingleton; // Motor de plantillas Mustache para Spark.
+import com.is1.proyecto.models.Materia; // Para crear mapas de datos (modelos para las plantillas).
+import com.is1.proyecto.models.Profesor; // Interfaz Map, utilizada para Map.of() o HashMap.
+import com.is1.proyecto.models.User;
 
-// Importaciones estándar de Java
-import java.util.HashMap; // Para crear mapas de datos (modelos para las plantillas).
-import java.util.Map; // Interfaz Map, utilizada para Map.of() o HashMap.
-
-// Importaciones de clases del proyecto
-import com.is1.proyecto.config.DBConfigSingleton; // Clase Singleton para la configuración de la base de datos.
-import com.is1.proyecto.models.Profesor;
-import com.is1.proyecto.models.User; // Modelo de ActiveJDBC que representa la tabla 'users'.
+import spark.ModelAndView; // Clase Singleton para la configuración de la base de datos.
+import static spark.Spark.after;
+import static spark.Spark.before; // Modelo de ActiveJDBC que representa la tabla 'users'.
+import static spark.Spark.get;
+import static spark.Spark.halt;
+import static spark.Spark.port;
+import static spark.Spark.post;
+import spark.template.mustache.MustacheTemplateEngine;
 
 /**
 * Clase principal de la aplicación Spark.
@@ -306,6 +308,77 @@ public class App {
            // Renderiza la vista profesoresList.mustache con la lista de profesores
            return new ModelAndView(model, "profesoresList.mustache");
         }, new MustacheTemplateEngine());
+
+        // Editar profesor
+        post("/profesor/editar/:id", (req, res) -> {
+            int id = Integer.parseInt(req.params(":id"));
+            Profesor profesor = Profesor.findById(id);
+            if (profesor != null) {
+                profesor.set("nombre", req.queryParams("nombre"));
+                profesor.set("apellido", req.queryParams("apellido"));
+                profesor.set("correo", req.queryParams("correo"));
+                profesor.set("dni", req.queryParams("dni"));
+                profesor.saveIt();
+            }
+            res.redirect("/profesores/listar");
+            return null;
+        });
+
+        // Eliminar profesor
+        get("/profesor/eliminar/:id", (req, res) -> {
+            int id = Integer.parseInt(req.params(":id"));
+            Profesor profesor = Profesor.findById(id);
+            if (profesor != null) {
+                profesor.delete();
+            }
+            res.redirect("/profesores/listar");
+            return null;
+        });
+
+        // Registrar materia
+        post("/materia/registrar", (req, res) -> {
+            Materia materia = new Materia();
+            materia.set("nombre", req.queryParams("nombre"));
+            materia.set("codigo", req.queryParams("codigo"));
+            materia.set("descripcion", req.queryParams("descripcion"));
+            materia.saveIt();
+            res.redirect("/materias/listar");
+            return null;
+        });
+
+        // Listar materias
+        get("/materias/listar", (req, res) -> {
+            List<Materia> materias = Materia.findAll();
+            Map<String, Object> model = new HashMap<>();
+            model.put("materias", materias);
+            return new ModelAndView(model, "materiasList.mustache");
+        }, new MustacheTemplateEngine());
+
+        // Editar materia
+        post("/materia/editar/:id", (req, res) -> {
+            int id = Integer.parseInt(req.params(":id"));
+            Materia materia = Materia.findById(id);
+            if (materia != null) {
+                materia.set("nombre", req.queryParams("nombre"));
+                materia.set("codigo", req.queryParams("codigo"));
+                materia.set("descripcion", req.queryParams("descripcion"));
+                materia.saveIt();
+            }
+            res.redirect("/materias/listar");
+            return null;
+        });
+
+        // Eliminar materia
+        get("/materia/eliminar/:id", (req, res) -> {
+            int id = Integer.parseInt(req.params(":id"));
+            Materia materia = Materia.findById(id);
+            if (materia != null) {
+                materia.delete();
+            }
+            res.redirect("/materias/listar");
+            return null;
+        });
+
 
    } // Fin del método main
 } // Fin de la clase App
