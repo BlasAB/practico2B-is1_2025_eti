@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mis Materias</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen p-6">
+    <div class="max-w-3xl mx-auto">
+
+        <div class="flex items-center justify-between mb-8">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-800">Mis Materias</h1>
+                <p class="text-gray-500 text-sm mt-1">
+                    {{alumnoApellido}}, {{alumnoNombre}}
+                </p>
+            </div>
+            <a href="/dashboard" class="text-gray-500 hover:text-gray-700 text-sm">&larr; Volver al panel</a>
+        </div>
+
+        <div class="bg-white rounded-2xl shadow-md overflow-hidden">
+            <div class="px-6 py-4 bg-violet-50 border-b border-violet-100 flex items-center justify-between">
+                <h2 class="text-xl font-bold text-violet-700">Materias inscriptas</h2>
+                <a href="/materias/disponibles"
+                   class="text-sm bg-violet-600 text-white px-4 py-1.5 rounded-lg hover:bg-violet-700 transition font-medium">
+                    + Inscribirse a más
+                </a>
+            </div>
+
+            {{#materias}}
+            <div class="border-b border-gray-100 px-6 py-4 flex items-center justify-between gap-4">
+                <div>
+                    <p class="font-semibold text-gray-800">{{materiaNombre}}</p>
+                    <p class="text-gray-500 text-sm">
+                        Código: <span class="font-medium">{{materiaCodigo}}</span>
+                        {{#fechaInscripcion}}&bull; Inscripto el {{fechaInscripcion}}{{/fechaInscripcion}}
+                    </p>
+                </div>
+                <div class="text-right flex-shrink-0">
+                    <span class="text-sm font-semibold text-gray-700">
+                        Nota: <span class="text-violet-700">{{nota}}</span>
+                    </span>
+                </div>
+            </div>
+            {{/materias}}
+
+            {{^tieneInscripciones}}
+            <div class="px-6 py-10 text-center text-gray-400">
+                <p>No estás inscripto en ninguna materia todavía.</p>
+                <p class="mt-2">
+                    <a href="/materias/disponibles" class="text-violet-600 hover:underline text-sm">
+                        Ver materias disponibles &rarr;
+                    </a>
+                </p>
+            </div>
+            {{/tieneInscripciones}}
+        </div>
+
+        {{!-- TODO: Cuando se implemente historial académico / promedio,
+              agregar aquí un resumen calculado con los datos de alumnos_materias. --}}
+
+    </div>
+</body>
+</html>

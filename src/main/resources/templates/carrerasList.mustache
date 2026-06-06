@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carreras</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen p-6">
+    <div class="max-w-3xl mx-auto">
+
+        <div class="flex items-center justify-between mb-8">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-800">Carreras</h1>
+                <p class="text-gray-500 text-sm mt-1">Seleccioná una carrera para ver su plan de estudios</p>
+            </div>
+            <a href="/dashboard" class="text-gray-500 hover:text-gray-700 text-sm">&larr; Volver al panel</a>
+        </div>
+
+        {{#successMessage}}
+        <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-lg mb-6">
+            {{successMessage}}
+        </div>
+        {{/successMessage}}
+        {{#error}}
+        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-6">
+            {{error}}
+        </div>
+        {{/error}}
+
+        <div class="bg-white rounded-2xl shadow-md overflow-hidden">
+            <div class="px-6 py-4 bg-teal-50 border-b border-teal-100">
+                <h2 class="text-xl font-bold text-teal-700">Carreras disponibles</h2>
+            </div>
+
+            {{#carreras}}
+            <div class="border-b border-gray-100 px-6 py-4 flex items-center justify-between">
+                <div>
+                    <p class="font-semibold text-gray-800">{{nombre}}</p>
+                    <p class="text-gray-500 text-sm">Código: <span class="font-medium">{{codigo}}</span></p>
+                </div>
+                <a href="/carrera/{{id}}/plan"
+                   class="text-xs bg-teal-600 text-white px-4 py-1.5 rounded-lg hover:bg-teal-700 transition font-medium">
+                    Ver plan de estudios
+                </a>
+            </div>
+            {{/carreras}}
+
+            {{^carreras}}
+            <div class="px-6 py-10 text-center text-gray-400">
+                <p>No hay carreras registradas en el sistema.</p>
+            </div>
+            {{/carreras}}
+        </div>
+
+    </div>
+</body>
+</html>

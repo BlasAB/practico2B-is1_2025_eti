@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Materias</title>
+    <title>Períodos de Inscripción</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 min-h-screen p-6">
@@ -12,8 +12,8 @@
         <!-- Header -->
         <div class="flex items-center justify-between mb-8">
             <div>
-                <h1 class="text-3xl font-bold text-gray-800">Materias</h1>
-                <p class="text-gray-500 text-sm mt-1">Alta, edición, eliminación y carga de notas</p>
+                <h1 class="text-3xl font-bold text-gray-800">Períodos de Inscripción</h1>
+                <p class="text-gray-500 text-sm mt-1">Alta, edición y eliminación de períodos</p>
             </div>
             <a href="/dashboard" class="text-gray-500 hover:text-gray-700 text-sm">&larr; Volver al panel</a>
         </div>
@@ -29,57 +29,55 @@
         </div>
         {{/error}}
 
-        <!-- Tabla de materias -->
+        <!-- Listado de períodos -->
         <div class="bg-white rounded-2xl shadow-md overflow-hidden">
             <div class="flex items-center justify-between px-6 py-4 bg-violet-50 border-b border-violet-100">
-                <h2 class="text-xl font-bold text-violet-700">Materias registradas</h2>
-                {{!-- El formulario de alta de materias se gestiona desde el panel de admin.
-                     Cuando se implemente GET /materia/registrar, actualizar este href. --}}
-                <a href="/admin/panel"
+                <h2 class="text-xl font-bold text-violet-700">Períodos registrados</h2>
+                <a href="/periodo/registrar"
                    class="inline-flex items-center gap-1 bg-violet-600 text-white px-4 py-2 rounded-lg hover:bg-violet-700 transition text-sm font-medium">
-                    + Nueva materia
+                    + Nuevo período
                 </a>
             </div>
 
-            {{#materias}}
+            {{#periodos}}
             <div class="border-b border-gray-100 px-6 py-4">
                 <div class="flex items-start justify-between">
                     <div>
                         <p class="font-semibold text-gray-800">{{nombre}}</p>
-                        <p class="text-gray-500 text-sm">
-                            Código: <span class="font-medium">{{codigo}}</span>
-                            {{#descripcion}}&bull; {{descripcion}}{{/descripcion}}
+                        <p class="text-gray-500 text-sm mt-1">
+                            Tipo: <span class="font-medium text-violet-700">{{tipo}}</span>
+                            &bull; {{fechaInicio}} → {{fechaFin}}
+                        </p>
+                        <p class="text-xs mt-1 text-gray-500">
+                            Estado: <span class="font-semibold text-gray-700">{{estado}}</span>
                         </p>
                     </div>
                     <div class="flex gap-2 ml-4 flex-shrink-0">
-                        <a href="/materia/{{id}}/notas"
-                           class="text-xs bg-violet-100 text-violet-700 border border-violet-300 px-3 py-1 rounded-lg hover:bg-violet-200 transition font-medium">
-                            Notas
-                        </a>
-                        {{!-- GET /materia/editar/:id no implementado aún; se gestiona desde admin panel --}}
-                        <a href="/admin/panel"
+                        <a href="/periodo/editar/{{id}}"
                            class="text-xs bg-yellow-100 text-yellow-700 border border-yellow-300 px-3 py-1 rounded-lg hover:bg-yellow-200 transition font-medium">
                             Editar
                         </a>
-                        <a href="/materia/eliminar/{{id}}"
-                           onclick="return confirm('¿Eliminar la materia {{nombre}}? Se eliminarán también todas las notas asociadas.')"
+                        <a href="/periodo/eliminar/{{id}}"
+                           onclick="return confirm('¿Eliminar el período {{nombre}}?')"
                            class="text-xs bg-red-100 text-red-700 border border-red-300 px-3 py-1 rounded-lg hover:bg-red-200 transition font-medium">
                             Eliminar
                         </a>
                     </div>
                 </div>
             </div>
-            {{/materias}}
+            {{/periodos}}
 
-            {{^materias}}
+            {{^periodos}}
             <div class="px-6 py-10 text-center text-gray-400">
-                <p>No hay materias registradas.</p>
+                <p>No hay períodos de inscripción registrados.</p>
             </div>
-            {{/materias}}
+            {{/periodos}}
         </div>
 
-        {{!-- TODO: Cuando se implemente la ruta GET /materia/registrar (formulario),
-              el botón "+ Nueva materia" del encabezado llevará allí directamente. --}}
+        {{!-- TODO: Cuando se implemente InscripcionMateria / InscripcionExamen,
+              este listado puede complementarse mostrando el período activo por tipo,
+              usando PeriodoInscripcion.getPeriodoActivoMaterias()
+              y PeriodoInscripcion.getPeriodoActivoExamenes() desde App.java. --}}
 
     </div>
 </body>

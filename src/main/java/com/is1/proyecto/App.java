@@ -11,9 +11,13 @@ import org.mindrot.jbcrypt.BCrypt;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.is1.proyecto.config.DBConfigSingleton;
 import com.is1.proyecto.models.Alumno;
+import com.is1.proyecto.models.AlumnoMateria;
+import com.is1.proyecto.models.Carrera;
+import com.is1.proyecto.models.CarreraMateria;
 import com.is1.proyecto.models.ExamenFinal;
 import com.is1.proyecto.models.Materia;
 import com.is1.proyecto.models.Mensaje;
+import com.is1.proyecto.models.PeriodoInscripcion;
 import com.is1.proyecto.models.Profesor;
 import com.is1.proyecto.models.User;
 
@@ -420,7 +424,21 @@ public class App {
 
         get("/materias/listar", (req, res) -> {
             Map<String, Object> model = new HashMap<>();
-            model.put("materias", Materia.findAll());
+            List<Materia> materiasRaw = Materia.findAll();
+            List<Map<String, Object>> materias = new ArrayList<>();
+            for (Materia m : materiasRaw) {
+                Map<String, Object> row = new HashMap<>();
+                row.put("id",          m.getId());
+                row.put("nombre",      m.getNombre());
+                row.put("codigo",      m.getCodigo());
+                row.put("descripcion", m.getDescripcion());
+                materias.add(row);
+            }
+            model.put("materias", materias);
+            String err = req.queryParams("error");
+            String ok  = req.queryParams("message");
+            if (err != null && !err.isEmpty()) model.put("error", err);
+            if (ok  != null && !ok.isEmpty())  model.put("successMessage", ok);
             return new ModelAndView(model, "materiasList.mustache");
         }, new MustacheTemplateEngine());
 
@@ -639,13 +657,9 @@ public class App {
         // CALENDARIO DE EXÁMENES (solo lectura)
         // ============================================================
 
-        // Muestra todas las fechas de exámenes ordenadas cronológicamente.
-        // Esta ruta consume los datos generados por la Gestión de Fechas de Exámenes.
-        // No expone acciones de alta, baja ni modificación.
         get("/examenes/calendario", (req, res) -> {
             Map<String, Object> model = new HashMap<>();
 
-            // Obtener todos los exámenes y ordenarlos por fecha y hora (ASC)
             List<ExamenFinal> examenesRaw = ExamenFinal.findAll("1=1 ORDER BY fecha ASC, hora ASC");
             List<Map<String, Object>> examenes = new ArrayList<>();
 
@@ -668,14 +682,9 @@ public class App {
         }, new MustacheTemplateEngine());
 
         // ============================================================
-        // MENSAJERÍA INTERNA (solo envío — bandeja de entrada es otro issue)
+        // MENSAJERÍA INTERNA
         // ============================================================
 
-        // FORMULARIO DE ENVÍO
-        // Construye la lista de destinatarios según el tipo del usuario logueado:
-        //   - Si es alumno  → ve solo profesores
-        //   - Si es profesor → ve solo alumnos
-        //   - Otro tipo     → ve ambos (admin, etc.)
         get("/mensaje/nuevo", (req, res) -> {
             Boolean loggedIn = req.session().attribute("loggedIn");
             if (loggedIn == null || !loggedIn) {
@@ -688,34 +697,23 @@ public class App {
             String userTipo = req.session().attribute("userTipo");
             model.put("remitenteNombre", username);
 
-            // Construir lista de destinatarios posibles según el tipo del remitente
             List<Map<String, Object>> destinatarios = new ArrayList<>();
 
             boolean esAlumno   = "alumno".equals(userTipo);
             boolean esProfesor = "profesor".equals(userTipo);
 
-            // Alumno solo puede escribir a profesores; profesor solo a alumnos
             if (esAlumno || (!esProfesor)) {
-                // Cargar profesores como destinatarios
                 List<Profesor> profesores = Profesor.findAll();
                 for (Profesor p : profesores) {
-                    User u = User.findFirst("name = ?", p.getCorreo());
-                    // Buscar el User asociado por nombre de usuario (puede ser correo o username)
-                    // Como no hay FK explícita entre Profesor y User, buscamos todos los users
-                    // y los ofrecemos; el admin puede haberlos registrado con cualquier username.
-                    // Usamos todos los Users que no son el remitente como destinatarios de tipo profesor.
                     Map<String, Object> dest = new HashMap<>();
-                    dest.put("userId",        p.getId()); // Se resuelve en POST usando tipo
                     dest.put("nombreCompleto", p.getNombre() + " " + p.getApellido());
                     dest.put("tipo",          "Profesor");
-                    // Prefijamos con "P:" para distinguir en el POST de los alumnos
                     dest.put("userId", "P:" + p.getId());
                     destinatarios.add(dest);
                 }
             }
 
             if (esProfesor || (!esAlumno)) {
-                // Cargar alumnos como destinatarios
                 List<Alumno> alumnos = Alumno.findAll();
                 for (Alumno a : alumnos) {
                     Map<String, Object> dest = new HashMap<>();
@@ -734,7 +732,6 @@ public class App {
             return new ModelAndView(model, "mensajeForm.mustache");
         }, new MustacheTemplateEngine());
 
-        // PROCESAMIENTO DEL ENVÍO
         post("/mensaje/enviar", (req, res) -> {
             Boolean loggedIn = req.session().attribute("loggedIn");
             if (loggedIn == null || !loggedIn) {
@@ -742,12 +739,11 @@ public class App {
                 return null;
             }
 
-            String destinatarioParam = req.queryParams("destinatario_id"); // "P:3" o "A:5"
+            String destinatarioParam = req.queryParams("destinatario_id");
             String asunto            = req.queryParams("asunto");
             String contenido         = req.queryParams("contenido");
             Object sessionUserId     = req.session().attribute("userId");
 
-            // Validaciones
             if (destinatarioParam == null || destinatarioParam.isEmpty()) {
                 res.redirect("/mensaje/nuevo?error=Debe seleccionar un destinatario.");
                 return null;
@@ -765,19 +761,10 @@ public class App {
                 return null;
             }
 
-            // Resolver destinatario_id en la tabla users a partir del prefijo "P:" o "A:"
-            // Como Alumno/Profesor no tienen FK a users, buscamos el User cuyo 'name'
-            // coincida con el username registrado. Como no hay columna de vinculación,
-            // usamos el índice de la tabla users ordenada por id para los registrados
-            // en el mismo orden. La solución más directa y consistente con el proyecto
-            // es almacenar el id del User del destinatario buscando por posición.
-            // NOTA: La arquitectura actual no vincula explícitamente User con Alumno/Profesor.
-            // TODO: Cuando se agregue una columna user_id a alumnos/profesores, reemplazar
-            //       esta resolución por una FK directa.
             int destinatarioUserId;
             try {
                 String[] partes = destinatarioParam.split(":");
-                String tipoDest = partes[0]; // "P" o "A"
+                String tipoDest = partes[0];
                 int perfilId    = Integer.parseInt(partes[1]);
 
                 if ("P".equals(tipoDest)) {
@@ -786,10 +773,6 @@ public class App {
                         res.redirect("/mensaje/nuevo?error=El destinatario seleccionado no existe.");
                         return null;
                     }
-                    // Buscar el User cuyo índice secuencial corresponde al Profesor.
-                    // Como no hay FK, tomamos el User con id = perfilId como aproximación
-                    // válida para el alcance de este issue.
-                    // TODO: Vincular Profesor.user_id cuando se implemente la FK.
                     destinatarioUserId = perfilId;
                 } else if ("A".equals(tipoDest)) {
                     Alumno a = Alumno.findById(perfilId);
@@ -797,7 +780,6 @@ public class App {
                         res.redirect("/mensaje/nuevo?error=El destinatario seleccionado no existe.");
                         return null;
                     }
-                    // TODO: Vincular Alumno.user_id cuando se implemente la FK.
                     destinatarioUserId = perfilId;
                 } else {
                     res.redirect("/mensaje/nuevo?error=Destinatario invalido.");
@@ -816,7 +798,6 @@ public class App {
             }
 
             try {
-                // Timestamp en formato ISO sin timezone (consistente con los VARCHAR del proyecto)
                 String ahora = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
                         .format(new java.util.Date());
 
@@ -828,8 +809,6 @@ public class App {
                 m.setFechaEnvio(ahora);
                 m.saveIt();
 
-                // TODO: Integrar visualización en Bandeja de Entrada cuando se implemente
-                //       el issue correspondiente (/mensajes/bandeja).
                 res.redirect("/dashboard?message=Mensaje enviado correctamente.");
             } catch (Exception ex) {
                 System.err.println("ERROR al enviar mensaje: " + ex.getMessage());
@@ -839,11 +818,9 @@ public class App {
         });
 
         // ============================================================
-        // BANDEJA DE ENTRADA (solo lectura — envío está en /mensaje/nuevo)
+        // BANDEJA DE ENTRADA
         // ============================================================
 
-        // Muestra los mensajes recibidos por el usuario autenticado.
-        // Filtra por destinatario_id = userId de sesión → cada usuario ve solo los suyos.
         get("/mensajes/bandeja", (req, res) -> {
             Boolean loggedIn = req.session().attribute("loggedIn");
             if (loggedIn == null || !loggedIn) {
@@ -860,9 +837,6 @@ public class App {
 
             Map<String, Object> model = new HashMap<>();
 
-            // Consulta segura: solo mensajes donde el destinatario es el usuario logueado.
-            // Ordenados por fecha_envio DESC (más recientes primero).
-            // El userId viene de la sesión del servidor, no de parámetros manipulables.
             List<Mensaje> mensajesRaw = Mensaje.where(
                     "destinatario_id = ? ORDER BY fecha_envio DESC", userId);
 
@@ -873,13 +847,9 @@ public class App {
                 row.put("contenido", m.getContenido());
                 row.put("fechaEnvio", m.getFechaEnvio());
 
-                // Resolver nombre del remitente desde la tabla users
                 User remitente = User.findById(m.getRemitenteId());
                 row.put("remitenteNombre",
                         remitente != null ? remitente.getName() : "(usuario eliminado)");
-
-                // TODO: Cuando se implemente marcado de leídos, agregar aquí
-                //       row.put("leido", m.esLeido()) para mostrar el indicador visual.
 
                 mensajes.add(row);
             }
@@ -888,13 +858,581 @@ public class App {
             return new ModelAndView(model, "bandejaMensajes.mustache");
         }, new MustacheTemplateEngine());
 
+        // ============================================================
+        // ABM DE PERÍODOS DE INSCRIPCIÓN
+        // ============================================================
+
+        // LISTADO
+        get("/periodos/listar", (req, res) -> {
+            Map<String, Object> model = new HashMap<>();
+
+            List<PeriodoInscripcion> periodosRaw = PeriodoInscripcion.findAll();
+            List<Map<String, Object>> periodos = new ArrayList<>();
+            for (PeriodoInscripcion p : periodosRaw) {
+                Map<String, Object> row = new HashMap<>();
+                row.put("id",          p.getId());
+                row.put("nombre",      p.getNombre());
+                row.put("tipo",        p.getTipo());
+                row.put("fechaInicio", p.getFechaInicio());
+                row.put("fechaFin",    p.getFechaFin());
+                row.put("estado",      p.getEstado());
+                periodos.add(row);
+            }
+            model.put("periodos", periodos);
+
+            String err = req.queryParams("error");
+            String ok  = req.queryParams("message");
+            if (err != null && !err.isEmpty()) model.put("error", err);
+            if (ok  != null && !ok.isEmpty())  model.put("successMessage", ok);
+
+            return new ModelAndView(model, "periodosList.mustache");
+        }, new MustacheTemplateEngine());
+
+        // ALTA — formulario
+        get("/periodo/registrar", (req, res) -> {
+            Map<String, Object> model = new HashMap<>();
+            String err = req.queryParams("error");
+            if (err != null && !err.isEmpty()) model.put("error", err);
+            return new ModelAndView(model, "periodoForm.mustache");
+        }, new MustacheTemplateEngine());
+
+        // ALTA — procesamiento
+        post("/periodo/registrar", (req, res) -> {
+            String nombre      = req.queryParams("nombre");
+            String tipo        = req.queryParams("tipo");
+            String fechaInicio = req.queryParams("fecha_inicio");
+            String fechaFin    = req.queryParams("fecha_fin");
+
+            String validacion = validarCamposPeriodo(nombre, tipo, fechaInicio, fechaFin);
+            if (validacion != null) {
+                res.redirect("/periodo/registrar?error=" + validacion);
+                return null;
+            }
+
+            try {
+                PeriodoInscripcion p = new PeriodoInscripcion();
+                p.setNombre(nombre.trim());
+                p.setTipo(tipo);
+                p.setFechaInicio(fechaInicio);
+                p.setFechaFin(fechaFin);
+                p.saveIt();
+
+                res.redirect("/periodos/listar?message=Periodo registrado correctamente.");
+            } catch (Exception ex) {
+                System.err.println("ERROR al registrar periodo: " + ex.getMessage());
+                res.redirect("/periodo/registrar?error=No se pudo registrar el periodo.");
+            }
+            return null;
+        });
+
+        // EDICIÓN — formulario con datos pre-cargados
+        get("/periodo/editar/:id", (req, res) -> {
+            int id = Integer.parseInt(req.params(":id"));
+            PeriodoInscripcion p = PeriodoInscripcion.findById(id);
+            if (p == null) {
+                res.redirect("/periodos/listar?error=Periodo no encontrado.");
+                return null;
+            }
+
+            Map<String, Object> model = new HashMap<>();
+            model.put("esEdicion",   true);
+            model.put("id",          p.getId());
+            model.put("nombre",      p.getNombre());
+            model.put("fechaInicio", p.getFechaInicio());
+            model.put("fechaFin",    p.getFechaFin());
+
+            // Marcar el tipo seleccionado para el <select> en Mustache
+            if ("MATERIAS".equals(p.getTipo()))  model.put("tipoMaterias",  true);
+            if ("EXAMENES".equals(p.getTipo()))  model.put("tipoExamenes",  true);
+
+            String err = req.queryParams("error");
+            if (err != null && !err.isEmpty()) model.put("error", err);
+
+            return new ModelAndView(model, "periodoForm.mustache");
+        }, new MustacheTemplateEngine());
+
+        // EDICIÓN — procesamiento
+        post("/periodo/editar/:id", (req, res) -> {
+            int id = Integer.parseInt(req.params(":id"));
+            PeriodoInscripcion p = PeriodoInscripcion.findById(id);
+            if (p == null) {
+                res.redirect("/periodos/listar?error=Periodo no encontrado.");
+                return null;
+            }
+
+            String nombre      = req.queryParams("nombre");
+            String tipo        = req.queryParams("tipo");
+            String fechaInicio = req.queryParams("fecha_inicio");
+            String fechaFin    = req.queryParams("fecha_fin");
+
+            String validacion = validarCamposPeriodo(nombre, tipo, fechaInicio, fechaFin);
+            if (validacion != null) {
+                res.redirect("/periodo/editar/" + id + "?error=" + validacion);
+                return null;
+            }
+
+            try {
+                p.setNombre(nombre.trim());
+                p.setTipo(tipo);
+                p.setFechaInicio(fechaInicio);
+                p.setFechaFin(fechaFin);
+                p.saveIt();
+
+                res.redirect("/periodos/listar?message=Periodo actualizado correctamente.");
+            } catch (Exception ex) {
+                System.err.println("ERROR al editar periodo: " + ex.getMessage());
+                res.redirect("/periodo/editar/" + id + "?error=No se pudo actualizar el periodo.");
+            }
+            return null;
+        });
+
+        // BAJA
+        get("/periodo/eliminar/:id", (req, res) -> {
+            int id = Integer.parseInt(req.params(":id"));
+            PeriodoInscripcion p = PeriodoInscripcion.findById(id);
+            if (p != null) {
+                // TODO: Cuando se implemente InscripcionMateria / InscripcionExamen,
+                //       verificar si existen inscripciones activas antes de eliminar.
+                p.delete();
+            }
+            res.redirect("/periodos/listar?message=Periodo eliminado correctamente.");
+            return null;
+        });
+
+        // ============================================================
+        // NOTAS DE ALUMNOS POR MATERIA (carga por profesor)
+        // ============================================================
+
+        // LISTADO — muestra todos los alumnos inscriptos en la materia con su nota actual.
+        // Si un alumno no tiene fila en alumnos_materias aún, se le crea una al guardar.
+        // GET /materia/:id/notas
+        get("/materia/:id/notas", (req, res) -> {
+            int materiaId = Integer.parseInt(req.params(":id"));
+            Materia materia = Materia.findById(materiaId);
+            if (materia == null) {
+                res.redirect("/materias/listar?error=Materia no encontrada.");
+                return null;
+            }
+
+            Map<String, Object> model = new HashMap<>();
+            model.put("materiaId",     materia.getId());
+            model.put("materiaNombre", materia.getNombre());
+            model.put("materiaCodigo", materia.getCodigo());
+
+            // Construir la lista de todos los alumnos enriquecida con la nota actual.
+            // Para cada alumno buscamos su fila en alumnos_materias; si no existe la nota
+            // es null y se muestra el campo vacío en el formulario.
+            List<Alumno> todosLosAlumnos = Alumno.findAll();
+            List<Map<String, Object>> filas = new ArrayList<>();
+            for (Alumno a : todosLosAlumnos) {
+                Map<String, Object> fila = new HashMap<>();
+                fila.put("alumnoId",        a.getId());
+                fila.put("alumnoNombre",    a.getNombre());
+                fila.put("alumnoApellido",  a.getApellido());
+
+                AlumnoMateria am = AlumnoMateria.findByAlumnoIdAndMateriaId(
+                        ((Number) a.getId()).intValue(), materiaId);
+                fila.put("nota", am != null && am.getNota() != null
+                        ? am.getNota().toString() : "");
+                filas.add(fila);
+            }
+            model.put("alumnos", filas);
+
+            String err = req.queryParams("error");
+            String ok  = req.queryParams("message");
+            if (err != null && !err.isEmpty()) model.put("error", err);
+            if (ok  != null && !ok.isEmpty())  model.put("successMessage", ok);
+
+            return new ModelAndView(model, "notasForm.mustache");
+        }, new MustacheTemplateEngine());
+
+        // GUARDAR NOTAS — procesa el formulario de carga de notas.
+        // POST /materia/:id/notas
+        // El formulario envía un campo nota_{alumnoId} por cada fila visible.
+        // Si la fila ya existe en alumnos_materias se actualiza; si no, se crea.
+        // Campos vacíos se guardan como null (nota no cargada).
+        post("/materia/:id/notas", (req, res) -> {
+            int materiaId = Integer.parseInt(req.params(":id"));
+            Materia materia = Materia.findById(materiaId);
+            if (materia == null) {
+                res.redirect("/materias/listar?error=Materia no encontrada.");
+                return null;
+            }
+
+            List<Alumno> todosLosAlumnos = Alumno.findAll();
+            List<String> errores = new ArrayList<>();
+
+            for (Alumno a : todosLosAlumnos) {
+                int alumnoId = ((Number) a.getId()).intValue();
+                String campo = req.queryParams("nota_" + alumnoId);
+
+                // Campo vacío → guardar o mantener null (nota no cargada)
+                if (campo == null || campo.trim().isEmpty()) {
+                    // Solo actualizamos si ya existe la fila; si no existe no la creamos vacía
+                    AlumnoMateria am = AlumnoMateria.findByAlumnoIdAndMateriaId(alumnoId, materiaId);
+                    if (am != null) {
+                        am.setNota(null);
+                        am.saveIt();
+                    }
+                    continue;
+                }
+
+                // Validar que sea numérico y esté en rango 0-10
+                double nota;
+                try {
+                    nota = Double.parseDouble(campo.trim().replace(",", "."));
+                } catch (NumberFormatException ex) {
+                    errores.add(a.getNombre() + " " + a.getApellido()
+                            + ": la nota debe ser un numero.");
+                    continue;
+                }
+                if (nota < 0 || nota > 10) {
+                    errores.add(a.getNombre() + " " + a.getApellido()
+                            + ": la nota debe estar entre 0 y 10.");
+                    continue;
+                }
+
+                // Upsert: actualizar si existe, insertar si no
+                try {
+                    AlumnoMateria am = AlumnoMateria.findByAlumnoIdAndMateriaId(alumnoId, materiaId);
+                    if (am == null) {
+                        am = new AlumnoMateria();
+                        am.setAlumnoId(alumnoId);
+                        am.setMateriaId(materiaId);
+                    }
+                    am.setNota(nota);
+                    am.saveIt();
+                } catch (Exception ex) {
+                    System.err.println("ERROR al guardar nota alumno " + alumnoId
+                            + " materia " + materiaId + ": " + ex.getMessage());
+                    errores.add(a.getNombre() + " " + a.getApellido()
+                            + ": error interno al guardar.");
+                }
+            }
+
+            if (!errores.isEmpty()) {
+                // Codificar los errores como un único mensaje separado por " | "
+                String mensajeError = String.join(" | ", errores);
+                res.redirect("/materia/" + materiaId + "/notas?error="
+                        + java.net.URLEncoder.encode(mensajeError, "UTF-8"));
+            } else {
+                res.redirect("/materia/" + materiaId + "/notas?message="
+                        + java.net.URLEncoder.encode("Notas guardadas correctamente.", "UTF-8"));
+            }
+            return null;
+        });
+
+        // ============================================================
+        // ISSUE #5 — INSCRIPCION A MATERIAS (alumno)
+        // ============================================================
+
+        // MATERIAS DISPONIBLES — lista todas las materias indicando si el alumno ya esta inscripto.
+        // Solo se muestra el boton "Inscribirse" cuando hay un periodo ACTIVO para MATERIAS.
+        // GET /materias/disponibles
+        get("/materias/disponibles", (req, res) -> {
+            Boolean loggedIn = req.session().attribute("loggedIn");
+            if (loggedIn == null || !loggedIn) {
+                res.redirect("/?error=Debes iniciar sesion para acceder.");
+                return null;
+            }
+            Object sessionUserId = req.session().attribute("userId");
+            if (sessionUserId == null) {
+                res.redirect("/?error=Sesion expirada.");
+                return null;
+            }
+            int userId = ((Number) sessionUserId).intValue();
+
+            // Buscar el alumno asociado al usuario de sesion (por id compartido)
+            Alumno alumno = Alumno.findById(userId);
+            if (alumno == null) {
+                res.redirect("/dashboard?error=Solo los alumnos pueden inscribirse a materias.");
+                return null;
+            }
+
+            Map<String, Object> model = new HashMap<>();
+
+            // Verificar periodo activo
+            PeriodoInscripcion periodo = PeriodoInscripcion.getPeriodoActivoMaterias();
+            boolean periodoActivo = (periodo != null);
+            model.put("periodoActivo", periodoActivo);
+            if (periodoActivo) {
+                model.put("periodoNombre", periodo.getNombre());
+                model.put("periodoFin",    periodo.getFechaFin());
+            }
+
+            // Construir lista de todas las materias marcando las ya inscriptas
+            List<Materia> todasLasMaterias = Materia.findAll();
+            List<Map<String, Object>> materias = new ArrayList<>();
+            for (Materia m : todasLasMaterias) {
+                Map<String, Object> row = new HashMap<>();
+                row.put("id",          m.getId());
+                row.put("nombre",      m.getNombre());
+                row.put("codigo",      m.getCodigo());
+                row.put("descripcion", m.getDescripcion());
+
+                AlumnoMateria am = AlumnoMateria.findByAlumnoIdAndMateriaId(userId,
+                        ((Number) m.getId()).intValue());
+                row.put("inscripto", am != null);
+                row.put("fechaInscripcion", am != null ? am.getFechaInscripcion() : null);
+                materias.add(row);
+            }
+            model.put("materias", materias);
+
+            String err = req.queryParams("error");
+            String ok  = req.queryParams("message");
+            if (err != null && !err.isEmpty()) model.put("error", err);
+            if (ok  != null && !ok.isEmpty())  model.put("successMessage", ok);
+
+            return new ModelAndView(model, "materiasDisponibles.mustache");
+        }, new MustacheTemplateEngine());
+
+        // INSCRIBIRSE A UNA MATERIA
+        // POST /materia/inscribirse/:id
+        post("/materia/inscribirse/:id", (req, res) -> {
+            Boolean loggedIn = req.session().attribute("loggedIn");
+            if (loggedIn == null || !loggedIn) {
+                res.redirect("/?error=Debes iniciar sesion.");
+                return null;
+            }
+            Object sessionUserId = req.session().attribute("userId");
+            if (sessionUserId == null) {
+                res.redirect("/?error=Sesion expirada.");
+                return null;
+            }
+            int userId = ((Number) sessionUserId).intValue();
+
+            Alumno alumno = Alumno.findById(userId);
+            if (alumno == null) {
+                res.redirect("/dashboard?error=Solo los alumnos pueden inscribirse a materias.");
+                return null;
+            }
+
+            // Validar periodo activo
+            PeriodoInscripcion periodo = PeriodoInscripcion.getPeriodoActivoMaterias();
+            if (periodo == null) {
+                res.redirect("/materias/disponibles?error="
+                        + java.net.URLEncoder.encode(
+                                "No hay un periodo de inscripcion activo. La inscripcion esta cerrada.",
+                                "UTF-8"));
+                return null;
+            }
+
+            int materiaId = Integer.parseInt(req.params(":id"));
+            Materia materia = Materia.findById(materiaId);
+            if (materia == null) {
+                res.redirect("/materias/disponibles?error=La materia seleccionada no existe.");
+                return null;
+            }
+
+            // Validar doble inscripcion
+            AlumnoMateria existente = AlumnoMateria.findByAlumnoIdAndMateriaId(userId, materiaId);
+            if (existente != null) {
+                res.redirect("/materias/disponibles?error="
+                        + java.net.URLEncoder.encode(
+                                "Ya estas inscripto en " + materia.getNombre() + ".",
+                                "UTF-8"));
+                return null;
+            }
+
+            try {
+                String hoy = java.time.LocalDate.now().toString();
+                AlumnoMateria am = new AlumnoMateria();
+                am.setAlumnoId(userId);
+                am.setMateriaId(materiaId);
+                am.setFechaInscripcion(hoy);
+                am.saveIt();
+
+                res.redirect("/materias/disponibles?message="
+                        + java.net.URLEncoder.encode(
+                                "Te inscribiste correctamente en " + materia.getNombre() + ".",
+                                "UTF-8"));
+            } catch (Exception ex) {
+                System.err.println("ERROR al inscribir alumno " + userId
+                        + " en materia " + materiaId + ": " + ex.getMessage());
+                res.redirect("/materias/disponibles?error=No se pudo completar la inscripcion. Intentá nuevamente.");
+            }
+            return null;
+        });
+
+        // MIS MATERIAS — lista las materias en que el alumno esta inscripto.
+        // GET /mis-materias
+        get("/mis-materias", (req, res) -> {
+            Boolean loggedIn = req.session().attribute("loggedIn");
+            if (loggedIn == null || !loggedIn) {
+                res.redirect("/?error=Debes iniciar sesion.");
+                return null;
+            }
+            Object sessionUserId = req.session().attribute("userId");
+            if (sessionUserId == null) {
+                res.redirect("/?error=Sesion expirada.");
+                return null;
+            }
+            int userId = ((Number) sessionUserId).intValue();
+
+            Alumno alumno = Alumno.findById(userId);
+            if (alumno == null) {
+                res.redirect("/dashboard?error=Solo los alumnos pueden acceder a esta seccion.");
+                return null;
+            }
+
+            Map<String, Object> model = new HashMap<>();
+            model.put("alumnoNombre",   alumno.getNombre());
+            model.put("alumnoApellido", alumno.getApellido());
+
+            List<AlumnoMateria> inscripciones = AlumnoMateria.findByAlumnoId(userId);
+            List<Map<String, Object>> materias = new ArrayList<>();
+            for (AlumnoMateria am : inscripciones) {
+                Map<String, Object> row = new HashMap<>();
+                row.put("fechaInscripcion", am.getFechaInscripcion());
+                row.put("nota", am.getNota() != null ? am.getNota().toString() : "Sin nota");
+
+                Materia m = Materia.findById(am.getMateriaId());
+                row.put("materiaNombre", m != null ? m.getNombre() : "(materia eliminada)");
+                row.put("materiaCodigo", m != null ? m.getCodigo() : "");
+                materias.add(row);
+            }
+            model.put("materias", materias);
+            model.put("tieneInscripciones", !materias.isEmpty());
+
+            return new ModelAndView(model, "misMaterias.mustache");
+        }, new MustacheTemplateEngine());
+
+        // ============================================================
+        // ISSUE #4 — PLAN DE ESTUDIOS POR CARRERA
+        // ============================================================
+
+        // LISTADO DE CARRERAS
+        // GET /carreras
+        get("/carreras", (req, res) -> {
+            Map<String, Object> model = new HashMap<>();
+
+            List<Carrera> carrerasRaw = Carrera.findAll();
+            List<Map<String, Object>> carreras = new ArrayList<>();
+            for (Carrera c : carrerasRaw) {
+                Map<String, Object> row = new HashMap<>();
+                row.put("id",     c.getId());
+                row.put("nombre", c.getNombre());
+                row.put("codigo", c.getCodigo());
+                carreras.add(row);
+            }
+            model.put("carreras", carreras);
+
+            String err = req.queryParams("error");
+            String ok  = req.queryParams("message");
+            if (err != null && !err.isEmpty()) model.put("error", err);
+            if (ok  != null && !ok.isEmpty())  model.put("successMessage", ok);
+
+            return new ModelAndView(model, "carrerasList.mustache");
+        }, new MustacheTemplateEngine());
+
+        // PLAN DE ESTUDIOS DE UNA CARRERA — agrupa materias por año
+        // GET /carrera/:id/plan
+        get("/carrera/:id/plan", (req, res) -> {
+            int carreraId = Integer.parseInt(req.params(":id"));
+            Carrera carrera = Carrera.findById(carreraId);
+            if (carrera == null) {
+                res.redirect("/carreras?error=Carrera no encontrada.");
+                return null;
+            }
+
+            Map<String, Object> model = new HashMap<>();
+            model.put("carreraId",     carrera.getId());
+            model.put("carreraNombre", carrera.getNombre());
+            model.put("carreraCodigo", carrera.getCodigo());
+
+            // Obtener relaciones carrera-materia ordenadas por anio y orden
+            List<CarreraMateria> relaciones = Carrera.getMateriasDe(carreraId);
+
+            // Agrupar por año usando una lista de mapas compatibles con Mustache.
+            // Estructura: [{anio: "Primer Año", materias: [{nombre, codigo, descripcion}, ...]}, ...]
+            // Materias sin año asignado van al grupo "Sin año asignado".
+            java.util.LinkedHashMap<String, List<Map<String, Object>>> gruposPorAnio =
+                    new java.util.LinkedHashMap<>();
+
+            for (CarreraMateria cm : relaciones) {
+                Integer anio = cm.getAnio();
+                String clave = (anio != null) ? anioEnLetras(anio) : "Sin año asignado";
+
+                gruposPorAnio.putIfAbsent(clave, new ArrayList<>());
+
+                Materia m = Materia.findById(cm.getMateriaId());
+                if (m != null) {
+                    Map<String, Object> mat = new HashMap<>();
+                    mat.put("nombre",      m.getNombre());
+                    mat.put("codigo",      m.getCodigo());
+                    mat.put("descripcion", m.getDescripcion());
+                    gruposPorAnio.get(clave).add(mat);
+                }
+            }
+
+            // Convertir a lista de mapas para Mustache (que no itera Map directamente)
+            List<Map<String, Object>> anios = new ArrayList<>();
+            for (Map.Entry<String, List<Map<String, Object>>> entry : gruposPorAnio.entrySet()) {
+                Map<String, Object> grupo = new HashMap<>();
+                grupo.put("anioNombre", entry.getKey());
+                grupo.put("materias",   entry.getValue());
+                anios.add(grupo);
+            }
+            model.put("anios", anios);
+            model.put("tieneAnios", !anios.isEmpty());
+
+            return new ModelAndView(model, "planEstudios.mustache");
+        }, new MustacheTemplateEngine());
+
     } // fin main()
+
+    // ----------------------------------------------------------------
+    // Helpers privados
+    // ----------------------------------------------------------------
 
     private static void addTipo(Map<String, Object> model, String tipo) {
         if (tipo != null && !tipo.isEmpty()) {
             model.put("tipo", tipo);
             if ("alumno".equals(tipo))   model.put("esAlumno", true);
             if ("profesor".equals(tipo)) model.put("esProfesor", true);
+        }
+    }
+
+    /**
+     * Valida los campos comunes de alta y edición de PeriodoInscripcion.
+     * Devuelve null si todo es válido, o el mensaje de error codificado para URL si no lo es.
+     */
+    private static String validarCamposPeriodo(String nombre, String tipo,
+                                               String fechaInicio, String fechaFin) {
+        if (nombre == null || nombre.trim().isEmpty())
+            return "El nombre es obligatorio.";
+        if (tipo == null || tipo.isEmpty() || (!tipo.equals("MATERIAS") && !tipo.equals("EXAMENES")))
+            return "El tipo es obligatorio y debe ser MATERIAS o EXAMENES.";
+        if (fechaInicio == null || fechaInicio.isEmpty())
+            return "La fecha de inicio es obligatoria.";
+        if (fechaFin == null || fechaFin.isEmpty())
+            return "La fecha de fin es obligatoria.";
+
+        try {
+            java.time.LocalDate inicio = java.time.LocalDate.parse(fechaInicio);
+            java.time.LocalDate fin    = java.time.LocalDate.parse(fechaFin);
+            if (fin.isBefore(inicio))
+                return "La fecha de fin no puede ser anterior a la fecha de inicio.";
+        } catch (Exception e) {
+            return "Las fechas deben tener el formato YYYY-MM-DD.";
+        }
+
+        return null; // sin errores
+    }
+
+    /**
+     * Convierte un numero de año a su representacion en texto para el plan de estudios.
+     * Ejemplo: 1 → "Primer Año", 2 → "Segundo Año", etc.
+     */
+    private static String anioEnLetras(int anio) {
+        switch (anio) {
+            case 1: return "Primer Año";
+            case 2: return "Segundo Año";
+            case 3: return "Tercer Año";
+            case 4: return "Cuarto Año";
+            case 5: return "Quinto Año";
+            case 6: return "Sexto Año";
+            default: return "Año " + anio;
         }
     }
 
