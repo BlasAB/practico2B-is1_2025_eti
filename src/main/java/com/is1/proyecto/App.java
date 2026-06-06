@@ -15,6 +15,7 @@ import com.is1.proyecto.models.AlumnoMateria;
 import com.is1.proyecto.models.Carrera;
 import com.is1.proyecto.models.CarreraMateria;
 import com.is1.proyecto.models.ExamenFinal;
+import com.is1.proyecto.models.InscripcionExamen;
 import com.is1.proyecto.models.Materia;
 import com.is1.proyecto.models.Mensaje;
 import com.is1.proyecto.models.PeriodoInscripcion;
@@ -1377,6 +1378,267 @@ public class App {
             model.put("tieneAnios", !anios.isEmpty());
 
             return new ModelAndView(model, "planEstudios.mustache");
+        }, new MustacheTemplateEngine());
+
+        // ============================================================
+        // ISSUE #6 — INSCRIPCION A EXAMENES FINALES (alumno)
+        // ============================================================
+
+        // EXAMENES DISPONIBLES — muestra todos los examenes indicando si el alumno ya esta inscripto.
+        // Solo habilita la inscripcion cuando hay un periodo ACTIVO para EXAMENES.
+        // GET /examenes/disponibles
+        get("/examenes/disponibles", (req, res) -> {
+            Boolean loggedIn = req.session().attribute("loggedIn");
+            if (loggedIn == null || !loggedIn) {
+                res.redirect("/?error=Debes iniciar sesion para acceder.");
+                return null;
+            }
+            Object sessionUserId = req.session().attribute("userId");
+            if (sessionUserId == null) {
+                res.redirect("/?error=Sesion expirada.");
+                return null;
+            }
+            int userId = ((Number) sessionUserId).intValue();
+
+            Alumno alumno = Alumno.findById(userId);
+            if (alumno == null) {
+                res.redirect("/dashboard?error=Solo los alumnos pueden inscribirse a examenes.");
+                return null;
+            }
+
+            Map<String, Object> model = new HashMap<>();
+
+            // Verificar periodo activo para EXAMENES
+            PeriodoInscripcion periodo = PeriodoInscripcion.getPeriodoActivoExamenes();
+            boolean periodoActivo = (periodo != null);
+            model.put("periodoActivo", periodoActivo);
+            if (periodoActivo) {
+                model.put("periodoNombre", periodo.getNombre());
+                model.put("periodoFin",    periodo.getFechaFin());
+            }
+
+            // Construir lista de todos los examenes enriquecida con datos de materia
+            // y marcando si el alumno ya esta inscripto en cada uno
+            List<ExamenFinal> todosLosExamenes = ExamenFinal.findAll();
+            List<Map<String, Object>> examenes = new ArrayList<>();
+            for (ExamenFinal e : todosLosExamenes) {
+                Map<String, Object> row = new HashMap<>();
+                row.put("id",    e.getId());
+                row.put("fecha", e.getFecha());
+                row.put("hora",  e.getHora());
+                row.put("turno", e.getTurno());
+                row.put("observaciones", e.getObservaciones());
+
+                Materia mat = Materia.findById(e.getMateriaId());
+                row.put("materiaNombre", mat != null ? mat.getNombre() : "(materia eliminada)");
+                row.put("materiaCodigo", mat != null ? mat.getCodigo() : "");
+
+                InscripcionExamen ie = InscripcionExamen.findByAlumnoIdAndExamenId(
+                        userId, ((Number) e.getId()).intValue());
+                row.put("inscripto",         ie != null);
+                row.put("fechaInscripcion",  ie != null ? ie.getFechaInscripcion() : null);
+
+                examenes.add(row);
+            }
+            model.put("examenes", examenes);
+
+            String err = req.queryParams("error");
+            String ok  = req.queryParams("message");
+            if (err != null && !err.isEmpty()) model.put("error", err);
+            if (ok  != null && !ok.isEmpty())  model.put("successMessage", ok);
+
+            return new ModelAndView(model, "examenesDisponibles.mustache");
+        }, new MustacheTemplateEngine());
+
+        // INSCRIBIRSE A UN EXAMEN
+        // POST /examen/inscribirse/:id
+        post("/examen/inscribirse/:id", (req, res) -> {
+            Boolean loggedIn = req.session().attribute("loggedIn");
+            if (loggedIn == null || !loggedIn) {
+                res.redirect("/?error=Debes iniciar sesion.");
+                return null;
+            }
+            Object sessionUserId = req.session().attribute("userId");
+            if (sessionUserId == null) {
+                res.redirect("/?error=Sesion expirada.");
+                return null;
+            }
+            int userId = ((Number) sessionUserId).intValue();
+
+            Alumno alumno = Alumno.findById(userId);
+            if (alumno == null) {
+                res.redirect("/dashboard?error=Solo los alumnos pueden inscribirse a examenes.");
+                return null;
+            }
+
+            // Validar periodo activo para EXAMENES
+            PeriodoInscripcion periodo = PeriodoInscripcion.getPeriodoActivoExamenes();
+            if (periodo == null) {
+                res.redirect("/examenes/disponibles?error="
+                        + java.net.URLEncoder.encode(
+                                "No hay un periodo de inscripcion a examenes activo. La inscripcion esta cerrada.",
+                                "UTF-8"));
+                return null;
+            }
+
+            int examenId = Integer.parseInt(req.params(":id"));
+            ExamenFinal examen = ExamenFinal.findById(examenId);
+            if (examen == null) {
+                res.redirect("/examenes/disponibles?error=El examen seleccionado no existe.");
+                return null;
+            }
+
+            // Validar doble inscripcion
+            InscripcionExamen existente = InscripcionExamen.findByAlumnoIdAndExamenId(userId, examenId);
+            if (existente != null) {
+                Materia mat = Materia.findById(examen.getMateriaId());
+                String nombreMat = mat != null ? mat.getNombre() : "ese examen";
+                res.redirect("/examenes/disponibles?error="
+                        + java.net.URLEncoder.encode(
+                                "Ya estas inscripto al examen de " + nombreMat + ".",
+                                "UTF-8"));
+                return null;
+            }
+
+            try {
+                String hoy = java.time.LocalDate.now().toString();
+                InscripcionExamen ie = new InscripcionExamen();
+                ie.setAlumnoId(userId);
+                ie.setExamenId(examenId);
+                ie.setFechaInscripcion(hoy);
+                ie.saveIt();
+
+                Materia mat = Materia.findById(examen.getMateriaId());
+                String nombreMat = mat != null ? mat.getNombre() : "el examen";
+                res.redirect("/examenes/disponibles?message="
+                        + java.net.URLEncoder.encode(
+                                "Te inscribiste correctamente al examen de " + nombreMat + ".",
+                                "UTF-8"));
+            } catch (Exception ex) {
+                System.err.println("ERROR al inscribir alumno " + userId
+                        + " en examen " + examenId + ": " + ex.getMessage());
+                res.redirect("/examenes/disponibles?error=No se pudo completar la inscripcion. Intentá nuevamente.");
+            }
+            return null;
+        });
+
+        // MIS EXAMENES — lista los examenes a los que el alumno esta inscripto.
+        // GET /mis-examenes
+        get("/mis-examenes", (req, res) -> {
+            Boolean loggedIn = req.session().attribute("loggedIn");
+            if (loggedIn == null || !loggedIn) {
+                res.redirect("/?error=Debes iniciar sesion.");
+                return null;
+            }
+            Object sessionUserId = req.session().attribute("userId");
+            if (sessionUserId == null) {
+                res.redirect("/?error=Sesion expirada.");
+                return null;
+            }
+            int userId = ((Number) sessionUserId).intValue();
+
+            Alumno alumno = Alumno.findById(userId);
+            if (alumno == null) {
+                res.redirect("/dashboard?error=Solo los alumnos pueden acceder a esta seccion.");
+                return null;
+            }
+
+            Map<String, Object> model = new HashMap<>();
+            model.put("alumnoNombre",   alumno.getNombre());
+            model.put("alumnoApellido", alumno.getApellido());
+
+            List<InscripcionExamen> inscripciones = InscripcionExamen.findByAlumnoId(userId);
+            List<Map<String, Object>> examenes = new ArrayList<>();
+            for (InscripcionExamen ie : inscripciones) {
+                Map<String, Object> row = new HashMap<>();
+                row.put("fechaInscripcion", ie.getFechaInscripcion());
+
+                ExamenFinal e = ExamenFinal.findById(ie.getExamenId());
+                if (e != null) {
+                    row.put("fecha", e.getFecha());
+                    row.put("hora",  e.getHora());
+                    row.put("turno", e.getTurno());
+                    Materia mat = Materia.findById(e.getMateriaId());
+                    row.put("materiaNombre", mat != null ? mat.getNombre() : "(materia eliminada)");
+                } else {
+                    row.put("fecha",        "(examen eliminado)");
+                    row.put("hora",         null);
+                    row.put("turno",        null);
+                    row.put("materiaNombre", "(materia eliminada)");
+                }
+                examenes.add(row);
+            }
+            model.put("examenes", examenes);
+            model.put("tieneExamenes", !examenes.isEmpty());
+
+            return new ModelAndView(model, "misExamenes.mustache");
+        }, new MustacheTemplateEngine());
+
+        // ============================================================
+        // ISSUE #9 — CONSULTA DE NOTAS POR ALUMNO
+        // ============================================================
+
+        // MIS NOTAS — muestra todas las notas cargadas para el alumno autenticado.
+        // Lee de alumnos_materias (misma tabla que usa el profesor para cargar notas).
+        // Solo muestra filas donde nota IS NOT NULL.
+        // GET /mis-notas
+        get("/mis-notas", (req, res) -> {
+            Boolean loggedIn = req.session().attribute("loggedIn");
+            if (loggedIn == null || !loggedIn) {
+                res.redirect("/?error=Debes iniciar sesion.");
+                return null;
+            }
+            Object sessionUserId = req.session().attribute("userId");
+            if (sessionUserId == null) {
+                res.redirect("/?error=Sesion expirada.");
+                return null;
+            }
+            int userId = ((Number) sessionUserId).intValue();
+
+            Alumno alumno = Alumno.findById(userId);
+            if (alumno == null) {
+                res.redirect("/dashboard?error=Solo los alumnos pueden consultar sus notas.");
+                return null;
+            }
+
+            Map<String, Object> model = new HashMap<>();
+            model.put("alumnoNombre",   alumno.getNombre());
+            model.put("alumnoApellido", alumno.getApellido());
+
+            // Leer de alumnos_materias — la misma tabla que usa el profesor
+            List<AlumnoMateria> inscripciones = AlumnoMateria.findByAlumnoId(userId);
+            List<Map<String, Object>> notas = new ArrayList<>();
+            for (AlumnoMateria am : inscripciones) {
+                // Solo incluir filas con nota cargada
+                if (am.getNota() == null) continue;
+
+                Map<String, Object> row = new HashMap<>();
+                row.put("nota", am.getNota().toString());
+
+                Materia m = Materia.findById(am.getMateriaId());
+                row.put("materiaNombre", m != null ? m.getNombre() : "(materia eliminada)");
+                row.put("materiaCodigo", m != null ? m.getCodigo() : "");
+                notas.add(row);
+            }
+            model.put("notas", notas);
+            model.put("tieneNotas", !notas.isEmpty());
+
+            // Calcular promedio si hay notas
+            if (!notas.isEmpty()) {
+                double suma = 0;
+                int count = 0;
+                for (AlumnoMateria am : inscripciones) {
+                    if (am.getNota() != null) {
+                        suma += am.getNota();
+                        count++;
+                    }
+                }
+                // Formatear a 2 decimales
+                String promedio = String.format("%.2f", suma / count);
+                model.put("promedio", promedio);
+            }
+
+            return new ModelAndView(model, "misNotas.mustache");
         }, new MustacheTemplateEngine());
 
     } // fin main()

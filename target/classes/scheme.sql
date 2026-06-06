@@ -9,6 +9,7 @@ DROP TABLE IF EXISTS periodos_inscripcion;
 DROP TABLE IF EXISTS alumnos_materias;
 DROP TABLE IF EXISTS carreras;
 DROP TABLE IF EXISTS carrera_materias;
+DROP TABLE IF EXISTS inscripciones_examenes;
 
 -- Tabla de usuarios (autenticacion)
 CREATE TABLE users (
@@ -44,13 +45,12 @@ CREATE TABLE materias (
 );
 
 -- Tabla de fechas de examenes finales
--- TODO: Cuando se implemente InscripcionExamen, agregar FK hacia esta tabla.
 CREATE TABLE examenes_finales (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    materia_id  INTEGER NOT NULL,
-    fecha       VARCHAR(10) NOT NULL,
-    hora        VARCHAR(5),
-    turno       VARCHAR(20),
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    materia_id    INTEGER NOT NULL,
+    fecha         VARCHAR(10) NOT NULL,
+    hora          VARCHAR(5),
+    turno         VARCHAR(20),
     observaciones TEXT,
     FOREIGN KEY (materia_id) REFERENCES materias(id)
 );
@@ -79,17 +79,13 @@ CREATE TABLE periodos_inscripcion (
 );
 
 -- Tabla de inscripciones alumno-materia (relacion N:M con datos de cursado).
--- Cada fila representa que un alumno esta inscripto en una materia.
 -- El campo nota es NULL hasta que el profesor la cargue (0.0 a 10.0).
--- El campo fecha_inscripcion se completa al momento de la inscripcion (issue #5).
+-- El campo fecha_inscripcion se completa al inscribirse (issue #5).
 --
 -- Preparado para futuros issues:
 --   condicion  VARCHAR(10)  → REGULAR | LIBRE
 --   estado     VARCHAR(15)  → CURSANDO | APROBADA | REPROBADA
 --   periodo_id INTEGER      → FK a periodos_inscripcion
---
--- UNIQUE(alumno_id, materia_id) evita inscripciones duplicadas.
--- Si se requieren inscripciones por periodo, ampliar a UNIQUE(alumno_id, materia_id, periodo_id).
 CREATE TABLE alumnos_materias (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
     alumno_id         INTEGER NOT NULL,
@@ -102,10 +98,6 @@ CREATE TABLE alumnos_materias (
 );
 
 -- Tabla de carreras (issue #4).
--- Preparada para futuros issues:
---   duracion_anios INTEGER  → cantidad de años del plan
---   descripcion    TEXT
---   multiple planes por carrera → agregar tabla planes_estudio con carrera_id
 CREATE TABLE carreras (
     id     INTEGER PRIMARY KEY AUTOINCREMENT,
     nombre VARCHAR(100) NOT NULL UNIQUE,
@@ -113,13 +105,7 @@ CREATE TABLE carreras (
 );
 
 -- Tabla de relacion carrera-materia con organizacion por año (issue #4).
--- anio: año del plan en que se dicta la materia (1, 2, 3...). NULL = sin organizar.
--- orden: posicion dentro del año para ordenar la visualizacion. NULL = sin orden definido.
---
--- Preparado para futuros issues:
---   cuatrimestre INTEGER      → 1 | 2 (agregar columna)
---   correlativa_id INTEGER    → FK a materias(id) para correlatividades
---   obligatoria INTEGER       → 1 = obligatoria, 0 = electiva
+-- Preparado para: cuatrimestre, correlativa_id, obligatoria.
 CREATE TABLE carrera_materias (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     carrera_id INTEGER NOT NULL,
@@ -129,4 +115,23 @@ CREATE TABLE carrera_materias (
     FOREIGN KEY (carrera_id) REFERENCES carreras(id),
     FOREIGN KEY (materia_id) REFERENCES materias(id),
     UNIQUE(carrera_id, materia_id)
+);
+
+-- Tabla de inscripciones de alumno a examen final (issue #6).
+-- Solo se puede inscribir durante un periodo activo de tipo EXAMENES.
+-- Un alumno no puede inscribirse dos veces al mismo examen: UNIQUE(alumno_id, examen_id).
+--
+-- Preparado para futuros issues:
+--   condicion   VARCHAR(10) → REGULAR | LIBRE (condicion con que rinde)
+--   estado      VARCHAR(15) → INSCRIPTO | PRESENTE | AUSENTE
+--   nota_final  REAL        → nota obtenida en el examen (actas de examen)
+--   periodo_id  INTEGER     → FK a periodos_inscripcion para trazabilidad
+CREATE TABLE inscripciones_examenes (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    alumno_id         INTEGER NOT NULL,
+    examen_id         INTEGER NOT NULL,
+    fecha_inscripcion VARCHAR(10) NOT NULL,
+    FOREIGN KEY (alumno_id) REFERENCES alumnos(id),
+    FOREIGN KEY (examen_id) REFERENCES examenes_finales(id),
+    UNIQUE(alumno_id, examen_id)
 );
