@@ -676,7 +676,7 @@ public class App {
         get("/examenes/calendario", (req, res) -> {
             Map<String, Object> model = new HashMap<>();
 
-            List<ExamenFinal> examenesRaw = ExamenFinal.findAll("1=1 ORDER BY fecha ASC, hora ASC");
+            List<ExamenFinal> examenesRaw = ExamenFinal.where("1=1 ORDER BY fecha ASC, hora ASC");
             List<Map<String, Object>> examenes = new ArrayList<>();
 
             for (ExamenFinal e : examenesRaw) {
