@@ -61,6 +61,26 @@ public class App {
             }
         });
 
+        before((req, res) -> {
+            String path = req.pathInfo();
+            if (path.equals("/")
+                    || path.equals("/login")
+                    || path.equals("/logout")
+                    || path.equals("/alumno/registrar")
+                    || path.equals("/profesor/registrar")) {
+                return;
+            }
+
+            Boolean loggedIn = req.session().attribute("loggedIn");
+            String username  = req.session().attribute("currentUserUsername");
+            Object userId    = req.session().attribute("userId");
+            if (loggedIn == null || !loggedIn || username == null || userId == null) {
+                res.redirect("/?error=" + java.net.URLEncoder.encode("Debes iniciar sesion para acceder a esta pagina.", "UTF-8"));
+                halt();
+            }
+        });
+
+
         after((req, res) -> {
             try {
                 Base.close();
@@ -135,11 +155,6 @@ public class App {
         get("/dashboard", (req, res) -> {
             Map<String, Object> model = new HashMap<>();
             String currentUsername = req.session().attribute("currentUserUsername");
-            Boolean loggedIn       = req.session().attribute("loggedIn");
-            if (currentUsername == null || loggedIn == null || !loggedIn) {
-                res.redirect("/?error=Debes iniciar sesion para acceder a esta pagina.");
-                return null;
-            }
             String tipo = req.session().attribute("userTipo");
             model.put("username", currentUsername);
             addTipo(model, tipo);
@@ -687,12 +702,6 @@ public class App {
         // ============================================================
 
         get("/mensaje/nuevo", (req, res) -> {
-            Boolean loggedIn = req.session().attribute("loggedIn");
-            if (loggedIn == null || !loggedIn) {
-                res.redirect("/?error=Debes iniciar sesion para enviar mensajes.");
-                return null;
-            }
-
             Map<String, Object> model = new HashMap<>();
             String username = req.session().attribute("currentUserUsername");
             String userTipo = req.session().attribute("userTipo");
@@ -734,12 +743,6 @@ public class App {
         }, new MustacheTemplateEngine());
 
         post("/mensaje/enviar", (req, res) -> {
-            Boolean loggedIn = req.session().attribute("loggedIn");
-            if (loggedIn == null || !loggedIn) {
-                res.redirect("/?error=Debes iniciar sesion para enviar mensajes.");
-                return null;
-            }
-
             String destinatarioParam = req.queryParams("destinatario_id");
             String asunto            = req.queryParams("asunto");
             String contenido         = req.queryParams("contenido");
@@ -755,10 +758,6 @@ public class App {
             }
             if (contenido == null || contenido.trim().isEmpty()) {
                 res.redirect("/mensaje/nuevo?error=El contenido del mensaje es obligatorio.");
-                return null;
-            }
-            if (sessionUserId == null) {
-                res.redirect("/?error=Sesion expirada. Por favor inicia sesion nuevamente.");
                 return null;
             }
 
@@ -823,17 +822,7 @@ public class App {
         // ============================================================
 
         get("/mensajes/bandeja", (req, res) -> {
-            Boolean loggedIn = req.session().attribute("loggedIn");
-            if (loggedIn == null || !loggedIn) {
-                res.redirect("/?error=Debes iniciar sesion para acceder a tu bandeja.");
-                return null;
-            }
-
             Object sessionUserId = req.session().attribute("userId");
-            if (sessionUserId == null) {
-                res.redirect("/?error=Sesion expirada. Por favor inicia sesion nuevamente.");
-                return null;
-            }
             int userId = ((Number) sessionUserId).intValue();
 
             Map<String, Object> model = new HashMap<>();
@@ -1131,16 +1120,7 @@ public class App {
         // Solo se muestra el boton "Inscribirse" cuando hay un periodo ACTIVO para MATERIAS.
         // GET /materias/disponibles
         get("/materias/disponibles", (req, res) -> {
-            Boolean loggedIn = req.session().attribute("loggedIn");
-            if (loggedIn == null || !loggedIn) {
-                res.redirect("/?error=Debes iniciar sesion para acceder.");
-                return null;
-            }
             Object sessionUserId = req.session().attribute("userId");
-            if (sessionUserId == null) {
-                res.redirect("/?error=Sesion expirada.");
-                return null;
-            }
             int userId = ((Number) sessionUserId).intValue();
 
             // Buscar el alumno asociado al usuario de sesion (por id compartido)
@@ -1190,16 +1170,7 @@ public class App {
         // INSCRIBIRSE A UNA MATERIA
         // POST /materia/inscribirse/:id
         post("/materia/inscribirse/:id", (req, res) -> {
-            Boolean loggedIn = req.session().attribute("loggedIn");
-            if (loggedIn == null || !loggedIn) {
-                res.redirect("/?error=Debes iniciar sesion.");
-                return null;
-            }
             Object sessionUserId = req.session().attribute("userId");
-            if (sessionUserId == null) {
-                res.redirect("/?error=Sesion expirada.");
-                return null;
-            }
             int userId = ((Number) sessionUserId).intValue();
 
             Alumno alumno = Alumno.findById(userId);
@@ -1258,16 +1229,7 @@ public class App {
         // MIS MATERIAS — lista las materias en que el alumno esta inscripto.
         // GET /mis-materias
         get("/mis-materias", (req, res) -> {
-            Boolean loggedIn = req.session().attribute("loggedIn");
-            if (loggedIn == null || !loggedIn) {
-                res.redirect("/?error=Debes iniciar sesion.");
-                return null;
-            }
             Object sessionUserId = req.session().attribute("userId");
-            if (sessionUserId == null) {
-                res.redirect("/?error=Sesion expirada.");
-                return null;
-            }
             int userId = ((Number) sessionUserId).intValue();
 
             Alumno alumno = Alumno.findById(userId);
@@ -1388,16 +1350,7 @@ public class App {
         // Solo habilita la inscripcion cuando hay un periodo ACTIVO para EXAMENES.
         // GET /examenes/disponibles
         get("/examenes/disponibles", (req, res) -> {
-            Boolean loggedIn = req.session().attribute("loggedIn");
-            if (loggedIn == null || !loggedIn) {
-                res.redirect("/?error=Debes iniciar sesion para acceder.");
-                return null;
-            }
             Object sessionUserId = req.session().attribute("userId");
-            if (sessionUserId == null) {
-                res.redirect("/?error=Sesion expirada.");
-                return null;
-            }
             int userId = ((Number) sessionUserId).intValue();
 
             Alumno alumno = Alumno.findById(userId);
@@ -1453,16 +1406,7 @@ public class App {
         // INSCRIBIRSE A UN EXAMEN
         // POST /examen/inscribirse/:id
         post("/examen/inscribirse/:id", (req, res) -> {
-            Boolean loggedIn = req.session().attribute("loggedIn");
-            if (loggedIn == null || !loggedIn) {
-                res.redirect("/?error=Debes iniciar sesion.");
-                return null;
-            }
             Object sessionUserId = req.session().attribute("userId");
-            if (sessionUserId == null) {
-                res.redirect("/?error=Sesion expirada.");
-                return null;
-            }
             int userId = ((Number) sessionUserId).intValue();
 
             Alumno alumno = Alumno.findById(userId);
@@ -1525,16 +1469,7 @@ public class App {
         // MIS EXAMENES — lista los examenes a los que el alumno esta inscripto.
         // GET /mis-examenes
         get("/mis-examenes", (req, res) -> {
-            Boolean loggedIn = req.session().attribute("loggedIn");
-            if (loggedIn == null || !loggedIn) {
-                res.redirect("/?error=Debes iniciar sesion.");
-                return null;
-            }
             Object sessionUserId = req.session().attribute("userId");
-            if (sessionUserId == null) {
-                res.redirect("/?error=Sesion expirada.");
-                return null;
-            }
             int userId = ((Number) sessionUserId).intValue();
 
             Alumno alumno = Alumno.findById(userId);
@@ -1583,16 +1518,7 @@ public class App {
         // Solo muestra filas donde nota IS NOT NULL.
         // GET /mis-notas
         get("/mis-notas", (req, res) -> {
-            Boolean loggedIn = req.session().attribute("loggedIn");
-            if (loggedIn == null || !loggedIn) {
-                res.redirect("/?error=Debes iniciar sesion.");
-                return null;
-            }
             Object sessionUserId = req.session().attribute("userId");
-            if (sessionUserId == null) {
-                res.redirect("/?error=Sesion expirada.");
-                return null;
-            }
             int userId = ((Number) sessionUserId).intValue();
 
             Alumno alumno = Alumno.findById(userId);
