@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{#esEdicion}}Editar Carrera{{/esEdicion}}{{^esEdicion}}Nueva Carrera{{/esEdicion}}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen p-6">
+    <div class="max-w-xl mx-auto">
+
+        <div class="flex items-center justify-between mb-8">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-800">
+                    {{#esEdicion}}Editar Carrera{{/esEdicion}}
+                    {{^esEdicion}}Nueva Carrera{{/esEdicion}}
+                </h1>
+                <p class="text-gray-500 text-sm mt-1">
+                    {{#esEdicion}}Modificá los datos de la carrera.{{/esEdicion}}
+                    {{^esEdicion}}Completá los datos para registrar una nueva carrera.{{/esEdicion}}
+                </p>
+            </div>
+            <a href="/admin/panel" class="text-gray-500 hover:text-gray-700 text-sm">&larr; Volver al Panel Admin</a>
+        </div>
+
+        {{#error}}
+        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-6">
+            {{error}}
+        </div>
+        {{/error}}
+
+        <div class="bg-white rounded-2xl shadow-md overflow-hidden">
+            <div class="px-6 py-4 bg-indigo-50 border-b border-indigo-100">
+                <h2 class="text-xl font-bold text-indigo-700">
+                    {{#esEdicion}}Datos de la Carrera{{/esEdicion}}
+                    {{^esEdicion}}Registrar Carrera{{/esEdicion}}
+                </h2>
+            </div>
+
+            <div class="px-6 py-6">
+                <form action="{{#esEdicion}}/admin/carrera/editar/{{id}}{{/esEdicion}}{{^esEdicion}}/admin/carrera/nueva{{/esEdicion}}" method="POST" class="space-y-5">
+
+                    <div>
+                        <label for="nombre" class="block text-sm font-medium text-gray-700 mb-1">Nombre de la Carrera <span class="text-red-500">*</span></label>
+                        <input type="text" id="nombre" name="nombre" value="{{nombre}}" required
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                               placeholder="Ej: Ingeniería en Sistemas">
+                    </div>
+
+                    <div>
+                        <label for="codigo" class="block text-sm font-medium text-gray-700 mb-1">Código <span class="text-red-500">*</span></label>
+                        <input type="text" id="codigo" name="codigo" value="{{codigo}}" required
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                               placeholder="Ej: ING-SIS" style="text-transform: uppercase;">
+                        <p class="text-xs text-gray-400 mt-1">Se guardará en mayúsculas automáticamente.</p>
+                    </div>
+
+                    <div class="flex gap-3 pt-2">
+                        <button type="submit"
+                                class="flex-1 bg-indigo-600 text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition font-semibold text-sm">
+                            {{#esEdicion}}Guardar Cambios{{/esEdicion}}
+                            {{^esEdicion}}Crear Carrera{{/esEdicion}}
+                        </button>
+                        <a href="/admin/panel"
+                           class="flex-1 text-center border border-gray-300 text-gray-600 py-2 px-4 rounded-lg hover:bg-gray-50 transition font-semibold text-sm">
+                            Cancelar
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+    </div>
+</body>
+</html>

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plan de Estudios — {{carreraNombre}}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen p-6">
+    <div class="max-w-4xl mx-auto">
+
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-8">
+            <div>
+                <p class="text-xs font-medium text-indigo-500 uppercase tracking-wider mb-1">Panel Admin</p>
+                <h1 class="text-3xl font-bold text-gray-800">Plan de Estudios</h1>
+                <p class="text-gray-500 text-sm mt-1">
+                    <span class="font-semibold text-gray-700">{{carreraNombre}}</span>
+                    <span class="text-gray-400 ml-1">· {{carreraCodigo}}</span>
+                </p>
+            </div>
+            <a href="/admin/panel" class="text-gray-500 hover:text-gray-700 text-sm">&larr; Volver al Panel Admin</a>
+        </div>
+
+        {{#successMessage}}
+        <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-lg mb-6">
+            {{successMessage}}
+        </div>
+        {{/successMessage}}
+        {{#error}}
+        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-6">
+            {{error}}
+        </div>
+        {{/error}}
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+            <!-- Materias asignadas -->
+            <div class="bg-white rounded-2xl shadow-md overflow-hidden">
+                <div class="px-6 py-4 bg-teal-50 border-b border-teal-100">
+                    <h2 class="text-xl font-bold text-teal-700">Materias en el Plan</h2>
+                    <p class="text-teal-600 text-xs mt-0.5">Materias actualmente asignadas a esta carrera</p>
+                </div>
+
+                {{#tieneMaterias}}
+                <div class="divide-y divide-gray-100">
+                    {{#materiasAsignadas}}
+                    <div class="px-6 py-4 flex items-center justify-between">
+                        <div>
+                            <p class="font-semibold text-gray-800 text-sm">{{nombre}}</p>
+                            <p class="text-gray-400 text-xs">
+                                Código: <span class="font-medium">{{codigo}}</span>
+                                {{#anio}}<span class="ml-2">· Año {{anio}}</span>{{/anio}}
+                            </p>
+                        </div>
+                        <a href="/admin/carrera/{{carreraId}}/plan/quitar/{{cmId}}"
+                           onclick="return confirm('¿Quitar la materia {{nombre}} del plan de estudios?')"
+                           class="text-xs bg-red-100 text-red-600 border border-red-300 px-3 py-1 rounded-lg hover:bg-red-200 transition font-medium flex-shrink-0 ml-3">
+                            Quitar
+                        </a>
+                    </div>
+                    {{/materiasAsignadas}}
+                </div>
+                {{/tieneMaterias}}
+
+                {{^tieneMaterias}}
+                <div class="px-6 py-10 text-center text-gray-400">
+                    <svg class="w-10 h-10 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                    </svg>
+                    <p class="text-sm">No hay materias asignadas aún.</p>
+                    <p class="text-xs mt-1">Usá el panel de la derecha para agregar materias.</p>
+                </div>
+                {{/tieneMaterias}}
+            </div>
+
+            <!-- Agregar materia -->
+            <div class="bg-white rounded-2xl shadow-md overflow-hidden">
+                <div class="px-6 py-4 bg-violet-50 border-b border-violet-100">
+                    <h2 class="text-xl font-bold text-violet-700">Agregar Materia</h2>
+                    <p class="text-violet-600 text-xs mt-0.5">Solo se listan las materias que aún no están en el plan</p>
+                </div>
+
+                <div class="px-6 py-6">
+                    {{#hayMateriasDisponibles}}
+                    <form action="/admin/carrera/{{carreraId}}/plan/agregar" method="POST" class="space-y-4">
+                        <div>
+                            <label for="materia_id" class="block text-sm font-medium text-gray-700 mb-1">
+                                Materia <span class="text-red-500">*</span>
+                            </label>
+                            <select id="materia_id" name="materia_id" required
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500 text-sm bg-white">
+                                <option value="">-- Seleccionar materia --</option>
+                                {{#materiasDisponibles}}
+                                <option value="{{id}}">{{nombre}} ({{codigo}})</option>
+                                {{/materiasDisponibles}}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label for="anio" class="block text-sm font-medium text-gray-700 mb-1">
+                                Año del Plan <span class="text-gray-400 font-normal">(opcional)</span>
+                            </label>
+                            <input type="number" id="anio" name="anio" min="1" max="6" placeholder="Ej: 1, 2, 3..."
+                                   class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500 text-sm">
+                            <p class="text-xs text-gray-400 mt-1">Ingresá el año curricular (1 al 6) o dejalo vacío.</p>
+                        </div>
+
+                        <button type="submit"
+                                class="w-full bg-violet-600 text-white py-2 px-4 rounded-lg hover:bg-violet-700 transition font-semibold text-sm">
+                            + Agregar al Plan
+                        </button>
+                    </form>
+                    {{/hayMateriasDisponibles}}
+
+                    {{^hayMateriasDisponibles}}
+                    <div class="text-center text-gray-400 py-6">
+                        <svg class="w-10 h-10 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <p class="text-sm font-medium">Todas las materias disponibles ya están asignadas.</p>
+                        <p class="text-xs mt-1">
+                            Para agregar más materias, primero
+                            <a href="/materias/listar" class="text-violet-600 hover:underline">creá nuevas materias</a>.
+                        </p>
+                    </div>
+                    {{/hayMateriasDisponibles}}
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+</body>
+</html>

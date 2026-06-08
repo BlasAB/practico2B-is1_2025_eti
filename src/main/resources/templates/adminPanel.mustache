@@ -13,13 +13,13 @@
         <div class="flex items-center justify-between mb-8">
             <div>
                 <h1 class="text-3xl font-bold text-gray-800">Panel de Administración</h1>
-                <p class="text-gray-500 text-sm mt-1">ABM de Alumnos y Profesores</p>
+                <p class="text-gray-500 text-sm mt-1">ABM de Alumnos, Profesores y Carreras</p>
             </div>
             <a href="/" class="text-gray-500 hover:text-gray-700 text-sm">&larr; Volver al inicio</a>
         </div>
 
 
-        <div class="flex gap-3">
+        <div class="flex gap-3 flex-wrap mb-6">
             <a href="/alumnos/listar"
             class="inline-block bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition text-sm font-medium">
                 Ver alumnos
@@ -94,7 +94,7 @@
         </div>
 
         <!-- ===================== PROFESORES ===================== -->
-        <div class="bg-white rounded-2xl shadow-md overflow-hidden">
+        <div class="bg-white rounded-2xl shadow-md mb-8 overflow-hidden">
             <div class="flex items-center justify-between px-6 py-4 bg-green-50 border-b border-green-100">
                 <h2 class="text-xl font-bold text-green-700">Profesores</h2>
                 <a href="/profesor/registrar"
@@ -164,6 +164,55 @@
             {{/profesores}}
         </div>
 
+        <!-- ===================== CARRERAS ===================== -->
+        <div class="bg-white rounded-2xl shadow-md overflow-hidden">
+            <div class="flex items-center justify-between px-6 py-4 bg-indigo-50 border-b border-indigo-100">
+                <div>
+                    <h2 class="text-xl font-bold text-indigo-700">Carreras</h2>
+                    <p class="text-indigo-500 text-xs mt-0.5">Gestión de carreras y planes de estudios</p>
+                </div>
+                <a href="/admin/carrera/nueva"
+                   class="inline-flex items-center gap-1 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition text-sm font-medium">
+                    + Nueva Carrera
+                </a>
+            </div>
+
+            {{#carreras}}
+            <div class="border-b border-gray-100 px-6 py-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="font-semibold text-gray-800">{{nombre}}</p>
+                        <p class="text-gray-400 text-xs">Código: <span class="font-medium">{{codigo}}</span></p>
+                    </div>
+                    <div class="flex gap-2 ml-4">
+                        <a href="/admin/carrera/{{id}}/plan"
+                           class="text-xs bg-teal-100 text-teal-700 border border-teal-300 px-3 py-1 rounded-lg hover:bg-teal-200 transition font-medium">
+                            Plan de Estudios
+                        </a>
+                        <a href="/admin/carrera/editar/{{id}}"
+                           class="text-xs bg-yellow-100 text-yellow-700 border border-yellow-300 px-3 py-1 rounded-lg hover:bg-yellow-200 transition font-medium">
+                            Editar
+                        </a>
+                        <a href="/admin/carrera/eliminar/{{id}}"
+                           onclick="return confirm('¿Eliminar la carrera {{nombre}}? También se eliminará su plan de estudios.')"
+                           class="text-xs bg-red-100 text-red-700 border border-red-300 px-3 py-1 rounded-lg hover:bg-red-200 transition font-medium">
+                            Eliminar
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {{/carreras}}
+
+            {{^carreras}}
+            <div class="px-6 py-10 text-center text-gray-400">
+                <p>No hay carreras registradas.</p>
+                <a href="/admin/carrera/nueva" class="text-indigo-500 hover:underline text-sm mt-2 inline-block">
+                    Crear la primera carrera →
+                </a>
+            </div>
+            {{/carreras}}
+        </div>
+
     </div>
 
     <script>
@@ -174,3 +223,4 @@
     </script>
 </body>
 </html>
+

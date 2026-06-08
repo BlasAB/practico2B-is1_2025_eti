@@ -60,13 +60,42 @@ public class App {
         });
 
 
+        // Filter: enviar a admin login si no hay sesion y bloquear acceso de no-admins
+        before("/admin/*", (req, res) -> {
+            String path = req.pathInfo();
+            if (path.equals("/admin/login")) {
+                return;
+            }
+
+            Boolean loggedIn = req.session().attribute("loggedIn");
+            if (loggedIn == null || !loggedIn) {
+                res.redirect("/admin/login?error=" + java.net.URLEncoder.encode("Debes iniciar sesion de admin para acceder a esta pagina.", "UTF-8"));
+                halt();
+            }
+
+            String tipo = req.session().attribute("userTipo");
+            if (!"admin".equals(tipo)) {
+                if ("alumno".equals(tipo) || "profesor".equals(tipo)) {
+                    res.redirect("/dashboard?error=" + java.net.URLEncoder.encode("No tenes permiso para acceder al panel de administracion.", "UTF-8"));
+                } else {
+                    res.redirect("/?error=" + java.net.URLEncoder.encode("No tenes permiso para acceder a esta pagina.", "UTF-8"));
+                }
+                halt();
+            }
+        });
+
         before((req, res) -> {
             String path = req.pathInfo();
             if (path.equals("/")
                     || path.equals("/login")
+                    || path.equals("/admin/login")
                     || path.equals("/logout")
                     || path.equals("/alumno/registrar")
-                    || path.equals("/profesor/registrar")) {
+                    || path.equals("/profesor/registrar")
+                    || path.startsWith("/materia/")
+                    || path.startsWith("/materias/")
+                    || path.startsWith("/alumnos/")
+                    || path.startsWith("/profesores/")) {
                 return;
             }
 
@@ -114,6 +143,42 @@ public class App {
             return null;
         });
 
+        get("/admin/login", (req, res) -> {
+            Map<String, Object> model = new HashMap<>();
+            String err = req.queryParams("error");
+            if (err != null && !err.isEmpty()) model.put("errorMessage", err);
+            model.put("tipo", "admin");
+            model.put("esAdmin", true);
+            return new ModelAndView(model, "login.mustache");
+        }, new MustacheTemplateEngine());
+
+        post("/admin/login", (req, res) -> {
+            String username = req.queryParams("username");
+            String password = req.queryParams("password");
+            Map<String, Object> model = new HashMap<>();
+            model.put("tipo", "admin");
+            model.put("esAdmin", true);
+
+            if (username == null || username.isEmpty() || password == null || password.isEmpty()) {
+                res.status(400);
+                model.put("errorMessage", "El nombre de usuario y la contrasena son requeridos.");
+                return new ModelAndView(model, "login.mustache");
+            }
+
+            if ("admin".equals(username) && "admin".equals(password)) {
+                req.session(true).attribute("currentUserUsername", "admin");
+                req.session().attribute("userId", 0);
+                req.session().attribute("loggedIn", true);
+                req.session().attribute("userTipo", "admin");
+                res.redirect("/admin/panel");
+                return null;
+            }
+
+            res.status(401);
+            model.put("errorMessage", "Usuario o contrasena incorrectos.");
+            return new ModelAndView(model, "login.mustache");
+        }, new MustacheTemplateEngine());
+
         post("/login", (req, res) -> {
             Map<String, Object> model = new HashMap<>();
             String tipo     = req.queryParams("tipo");
@@ -136,8 +201,45 @@ public class App {
             }
 
             if (BCrypt.checkpw(password, ac.getString("password"))) {
+                Integer perfilId = null;
+                if ("alumno".equals(tipo) || "profesor".equals(tipo)) {
+                    Object perfilIdObj = ac.get("perfil_id");
+                    if (perfilIdObj instanceof Integer) {
+                        perfilId = (Integer) perfilIdObj;
+                    } else if (perfilIdObj instanceof Number) {
+                        perfilId = ((Number) perfilIdObj).intValue();
+                    } else if (perfilIdObj instanceof String) {
+                        try {
+                            perfilId = Integer.parseInt((String) perfilIdObj);
+                        } catch (NumberFormatException ignored) {
+                        }
+                    }
+                    String perfilTipo = ac.getString("perfil_tipo");
+                    if (perfilId == null) {
+                        // Fallback para esquemas antiguos donde el id del usuario y el perfil coincidían.
+                        Object idObj = ac.getId();
+                        if (idObj instanceof Integer) {
+                            perfilId = (Integer) idObj;
+                        } else if (idObj instanceof Number) {
+                            perfilId = ((Number) idObj).intValue();
+                        } else if (idObj instanceof String) {
+                            try {
+                                perfilId = Integer.parseInt((String) idObj);
+                            } catch (NumberFormatException ignored) {
+                            }
+                        }
+                    }
+                    if (perfilTipo != null && !tipo.equals(perfilTipo)) {
+                        res.status(401);
+                        model.put("errorMessage", "Usuario o contrasena incorrectos.");
+                        addTipo(model, tipo);
+                        return new ModelAndView(model, "login.mustache");
+                    }
+                }
+
                 req.session(true).attribute("currentUserUsername", username);
                 req.session().attribute("userId", ac.getId());
+                if (perfilId != null) req.session().attribute("profileId", perfilId);
                 req.session().attribute("loggedIn", true);
                 req.session().attribute("userTipo", tipo != null ? tipo : "user");
                 model.put("username", username);
@@ -215,10 +317,11 @@ public class App {
                 User u = new User();
                 u.set("name", username);
                 u.set("password", BCrypt.hashpw(password, BCrypt.gensalt()));
+                u.set("perfil_id", a.getId());
+                u.set("perfil_tipo", "alumno");
                 u.saveIt();
 
-                // TODO: Implementar integración con listado de alumnos cuando se resuelva el issue correspondiente
-                res.redirect("/admin/panel?message=Alumno registrado correctamente.");
+                res.redirect("/?tipo=alumno&message=Alumno registrado correctamente. Ya podes iniciar sesion.");
             } catch (Exception e) {
                 System.err.println("ERROR al registrar alumno: " + e.getMessage());
                 res.redirect("/alumno/registrar?error=No se pudo registrar el alumno. El correo o el DNI pueden estar en uso.");
@@ -303,10 +406,241 @@ public class App {
         // PANEL ADMIN
         // ============================================================
 
+        // ============================================================
+        // ABM DE CARRERAS (admin)
+        // ============================================================
+
+        // ALTA — formulario
+        get("/admin/carrera/nueva", (req, res) -> {
+            Map<String, Object> model = new HashMap<>();
+            String err = req.queryParams("error");
+            if (err != null && !err.isEmpty()) model.put("error", err);
+            return new ModelAndView(model, "carreraForm.mustache");
+        }, new MustacheTemplateEngine());
+
+        // ALTA — procesamiento
+        post("/admin/carrera/nueva", (req, res) -> {
+            String nombre = req.queryParams("nombre");
+            String codigo = req.queryParams("codigo");
+            if (nombre == null || nombre.trim().isEmpty()) {
+                res.redirect("/admin/carrera/nueva?error=El nombre es obligatorio.");
+                return null;
+            }
+            if (codigo == null || codigo.trim().isEmpty()) {
+                res.redirect("/admin/carrera/nueva?error=El codigo es obligatorio.");
+                return null;
+            }
+            try {
+                Carrera c = new Carrera();
+                c.setNombre(nombre.trim());
+                c.setCodigo(codigo.trim().toUpperCase());
+                c.saveIt();
+                res.redirect("/admin/panel?message=Carrera creada correctamente.");
+            } catch (Exception e) {
+                System.err.println("ERROR al crear carrera: " + e.getMessage());
+                res.redirect("/admin/carrera/nueva?error=No se pudo crear la carrera. El nombre o codigo pueden estar en uso.");
+            }
+            return null;
+        });
+
+        // EDICIÓN — formulario
+        get("/admin/carrera/editar/:id", (req, res) -> {
+            int id = Integer.parseInt(req.params(":id"));
+            Carrera c = Carrera.findById(id);
+            if (c == null) {
+                res.redirect("/admin/panel?error=Carrera no encontrada.");
+                return null;
+            }
+            Map<String, Object> model = new HashMap<>();
+            model.put("esEdicion", true);
+            model.put("id",     c.getId());
+            model.put("nombre", c.getNombre());
+            model.put("codigo", c.getCodigo());
+            String err = req.queryParams("error");
+            if (err != null && !err.isEmpty()) model.put("error", err);
+            return new ModelAndView(model, "carreraForm.mustache");
+        }, new MustacheTemplateEngine());
+
+        // EDICIÓN — procesamiento
+        post("/admin/carrera/editar/:id", (req, res) -> {
+            int id = Integer.parseInt(req.params(":id"));
+            Carrera c = Carrera.findById(id);
+            if (c == null) {
+                res.redirect("/admin/panel?error=Carrera no encontrada.");
+                return null;
+            }
+            String nombre = req.queryParams("nombre");
+            String codigo = req.queryParams("codigo");
+            if (nombre == null || nombre.trim().isEmpty()) {
+                res.redirect("/admin/carrera/editar/" + id + "?error=El nombre es obligatorio.");
+                return null;
+            }
+            if (codigo == null || codigo.trim().isEmpty()) {
+                res.redirect("/admin/carrera/editar/" + id + "?error=El codigo es obligatorio.");
+                return null;
+            }
+            try {
+                c.setNombre(nombre.trim());
+                c.setCodigo(codigo.trim().toUpperCase());
+                c.saveIt();
+                res.redirect("/admin/panel?message=Carrera actualizada correctamente.");
+            } catch (Exception e) {
+                System.err.println("ERROR al editar carrera: " + e.getMessage());
+                res.redirect("/admin/carrera/editar/" + id + "?error=No se pudo actualizar la carrera. El nombre o codigo pueden estar en uso.");
+            }
+            return null;
+        });
+
+        // BAJA — eliminar carrera y sus relaciones
+        get("/admin/carrera/eliminar/:id", (req, res) -> {
+            int id = Integer.parseInt(req.params(":id"));
+            Carrera c = Carrera.findById(id);
+            if (c != null) {
+                // Eliminar primero las relaciones carrera_materias
+                List<CarreraMateria> relaciones = CarreraMateria.where("carrera_id = ?", id);
+                for (CarreraMateria cm : relaciones) {
+                    cm.delete();
+                }
+                c.delete();
+                res.redirect("/admin/panel?message=Carrera eliminada correctamente.");
+            } else {
+                res.redirect("/admin/panel?error=Carrera no encontrada.");
+            }
+            return null;
+        });
+
+        // PLAN DE ESTUDIOS — vista de gestión (admin)
+        get("/admin/carrera/:id/plan", (req, res) -> {
+            int carreraId = Integer.parseInt(req.params(":id"));
+            Carrera carrera = Carrera.findById(carreraId);
+            if (carrera == null) {
+                res.redirect("/admin/panel?error=Carrera no encontrada.");
+                return null;
+            }
+
+            Map<String, Object> model = new HashMap<>();
+            model.put("carreraId",     carrera.getId());
+            model.put("carreraNombre", carrera.getNombre());
+            model.put("carreraCodigo", carrera.getCodigo());
+
+            // Materias ya asignadas a la carrera
+            List<CarreraMateria> relaciones = Carrera.getMateriasDe(carreraId);
+            List<Map<String, Object>> materiasAsignadas = new ArrayList<>();
+            for (CarreraMateria cm : relaciones) {
+                Materia m = Materia.findById(cm.getMateriaId());
+                if (m != null) {
+                    Map<String, Object> row = new HashMap<>();
+                    row.put("cmId",    cm.getId());
+                    row.put("id",      m.getId());
+                    row.put("nombre",  m.getNombre());
+                    row.put("codigo",  m.getCodigo());
+                    row.put("anio",    cm.getAnio() != null ? cm.getAnio() : "");
+                    materiasAsignadas.add(row);
+                }
+            }
+            model.put("materiasAsignadas", materiasAsignadas);
+            model.put("tieneMaterias", !materiasAsignadas.isEmpty());
+
+            // IDs de materias ya asignadas para excluirlas del select
+            java.util.Set<Object> asignadasIds = new java.util.HashSet<>();
+            for (CarreraMateria cm : relaciones) asignadasIds.add(cm.getMateriaId());
+
+            // Materias disponibles (no asignadas aún)
+            List<Materia> todasLasMaterias = Materia.findAll();
+            List<Map<String, Object>> materiasDisponibles = new ArrayList<>();
+            for (Materia m : todasLasMaterias) {
+                if (!asignadasIds.contains(((Number) m.getId()).intValue())) {
+                    Map<String, Object> row = new HashMap<>();
+                    row.put("id",     m.getId());
+                    row.put("nombre", m.getNombre());
+                    row.put("codigo", m.getCodigo());
+                    materiasDisponibles.add(row);
+                }
+            }
+            model.put("materiasDisponibles", materiasDisponibles);
+            model.put("hayMateriasDisponibles", !materiasDisponibles.isEmpty());
+
+            String err = req.queryParams("error");
+            String ok  = req.queryParams("message");
+            if (err != null && !err.isEmpty()) model.put("error", err);
+            if (ok  != null && !ok.isEmpty())  model.put("successMessage", ok);
+
+            return new ModelAndView(model, "planEstudiosAdmin.mustache");
+        }, new MustacheTemplateEngine());
+
+        // PLAN DE ESTUDIOS — agregar materia
+        post("/admin/carrera/:id/plan/agregar", (req, res) -> {
+            int carreraId = Integer.parseInt(req.params(":id"));
+            String materiaIdStr = req.queryParams("materia_id");
+            String anioStr      = req.queryParams("anio");
+
+            if (materiaIdStr == null || materiaIdStr.isEmpty()) {
+                res.redirect("/admin/carrera/" + carreraId + "/plan?error=Debe seleccionar una materia.");
+                return null;
+            }
+
+            int materiaId = Integer.parseInt(materiaIdStr);
+            Materia mat = Materia.findById(materiaId);
+            if (mat == null) {
+                res.redirect("/admin/carrera/" + carreraId + "/plan?error=La materia seleccionada no existe.");
+                return null;
+            }
+
+            // Verificar que no esté ya asignada
+            List<CarreraMateria> existe = CarreraMateria.where("carrera_id = ? AND materia_id = ?", carreraId, materiaId);
+            if (!existe.isEmpty()) {
+                res.redirect("/admin/carrera/" + carreraId + "/plan?error=La materia ya está asignada a esta carrera.");
+                return null;
+            }
+
+            try {
+                CarreraMateria cm = new CarreraMateria();
+                cm.setCarreraId(carreraId);
+                cm.setMateriaId(materiaId);
+                if (anioStr != null && !anioStr.trim().isEmpty()) {
+                    try { cm.setAnio(Integer.parseInt(anioStr.trim())); }
+                    catch (NumberFormatException ignored) {}
+                }
+                cm.saveIt();
+                res.redirect("/admin/carrera/" + carreraId + "/plan?message=Materia agregada al plan de estudios correctamente.");
+            } catch (Exception e) {
+                System.err.println("ERROR al agregar materia al plan: " + e.getMessage());
+                res.redirect("/admin/carrera/" + carreraId + "/plan?error=No se pudo agregar la materia al plan.");
+            }
+            return null;
+        });
+
+        // PLAN DE ESTUDIOS — quitar materia
+        get("/admin/carrera/:id/plan/quitar/:cmid", (req, res) -> {
+            int carreraId = Integer.parseInt(req.params(":id"));
+            int cmId      = Integer.parseInt(req.params(":cmid"));
+            CarreraMateria cm = CarreraMateria.findById(cmId);
+            if (cm != null && cm.getCarreraId().equals(carreraId)) {
+                cm.delete();
+                res.redirect("/admin/carrera/" + carreraId + "/plan?message=Materia quitada del plan de estudios correctamente.");
+            } else {
+                res.redirect("/admin/carrera/" + carreraId + "/plan?error=No se encontró la relacion a eliminar.");
+            }
+            return null;
+        });
+
         get("/admin/panel", (req, res) -> {
             Map<String, Object> model = new HashMap<>();
             model.put("alumnos",   Alumno.findAll());
             model.put("profesores", Profesor.findAll());
+
+            // Carreras para la sección de gestión
+            List<Carrera> carrerasRaw = Carrera.findAll();
+            List<Map<String, Object>> carreras = new ArrayList<>();
+            for (Carrera c : carrerasRaw) {
+                Map<String, Object> row = new HashMap<>();
+                row.put("id",     c.getId());
+                row.put("nombre", c.getNombre());
+                row.put("codigo", c.getCodigo());
+                carreras.add(row);
+            }
+            model.put("carreras", carreras);
+
             String err = req.queryParams("error");
             String ok  = req.queryParams("message");
             if (err != null && !err.isEmpty()) model.put("error", err);
@@ -350,9 +684,11 @@ public class App {
                 User u = new User();
                 u.set("name", username);
                 u.set("password", BCrypt.hashpw(password, BCrypt.gensalt()));
+                u.set("perfil_id", p.getId());
+                u.set("perfil_tipo", "profesor");
                 u.saveIt();
 
-                res.redirect("/profesor/registrar?successMessage=Profesor registrado correctamente. Ya podes iniciar sesion.");
+                res.redirect("/?tipo=profesor&message=Profesor registrado correctamente. Ya podes iniciar sesion.");
             } catch (Exception e) {
                 System.err.println("ERROR al registrar profesor: " + e.getMessage());
                 res.redirect("/profesor/registrar?error=No se pudo registrar el profesor. El correo o el DNI pueden estar en uso.");
@@ -430,16 +766,38 @@ public class App {
                 
         get("/materia/registrar", (req, res) -> {
             Map<String, Object> model = new HashMap<>();
+            String err = req.queryParams("error");
+            String ok  = req.queryParams("message");
+            if (err != null && !err.isEmpty()) model.put("error", err);
+            if (ok  != null && !ok.isEmpty())  model.put("successMessage", ok);
             return new ModelAndView(model, "materiaForm.mustache");
         }, new MustacheTemplateEngine());
 
         post("/materia/registrar", (req, res) -> {
-            Materia m = new Materia();
-            m.set("nombre",      req.queryParams("nombre"));
-            m.set("codigo",      req.queryParams("codigo"));
-            m.set("descripcion", req.queryParams("descripcion"));
-            m.saveIt();
-            res.redirect("/materias/listar");
+            String nombre      = req.queryParams("nombre");
+            String codigo      = req.queryParams("codigo");
+            String descripcion = req.queryParams("descripcion");
+
+            if (nombre == null || nombre.trim().isEmpty()) {
+                res.redirect("/materia/registrar?error=El nombre es obligatorio.");
+                return null;
+            }
+            if (codigo == null || codigo.trim().isEmpty()) {
+                res.redirect("/materia/registrar?error=El codigo es obligatorio.");
+                return null;
+            }
+
+            try {
+                Materia m = new Materia();
+                m.set("nombre",      nombre.trim());
+                m.set("codigo",      codigo.trim());
+                m.set("descripcion", (descripcion != null && !descripcion.trim().isEmpty()) ? descripcion.trim() : null);
+                m.saveIt();
+                res.redirect("/materias/listar?message=Materia registrada correctamente.");
+            } catch (Exception e) {
+                System.err.println("ERROR al registrar materia: " + e.getMessage());
+                res.redirect("/materia/registrar?error=No se pudo registrar la materia. El nombre o codigo pueden estar en uso.");
+            }
             return null;
         });
 
@@ -466,41 +824,23 @@ public class App {
         get("/materia/editar/:id", (req, res) -> {
             int id = Integer.parseInt(req.params(":id"));
             Materia materia = Materia.findById(id);
+            if (materia == null) {
+                res.redirect("/materias/listar?error=Materia no encontrada.");
+                return null;
+            }
 
-            // Acá armás el model
             Map<String, Object> model = new HashMap<>();
-            model.put("materia", materia);
+            model.put("esEdicion",   true);
+            model.put("id",          materia.getId());
+            model.put("nombre",      materia.getNombre());
+            model.put("codigo",      materia.getCodigo());
+            model.put("descripcion", materia.getDescripcion());
 
-            // Profesor asignado
-            Profesor profesor = Profesor.findFirst(
-                "id IN (SELECT profesor_id FROM profesor_materias WHERE materia_id = ?)", id
-            );
-            model.put("profesor", profesor);
+            String err = req.queryParams("error");
+            String ok  = req.queryParams("message");
+            if (err != null && !err.isEmpty()) model.put("error", err);
+            if (ok  != null && !ok.isEmpty())  model.put("successMessage", ok);
 
-            // Alumnos inscriptos
-            List<AlumnoMateria> inscripciones = AlumnoMateria.findByMateriaId(id);
-            List<Map<String, Object>> alumnos = new ArrayList<>();
-            for (AlumnoMateria am : inscripciones) {
-                Alumno a = Alumno.findById(am.getAlumnoId());
-                if (a != null) {
-                    Map<String, Object> row = new HashMap<>();
-                    row.put("nombre", a.getNombre());
-                    row.put("apellido", a.getApellido());
-                    row.put("correo", a.getCorreo());
-                    row.put("nota", am.getNota());
-                    row.put("fecha", am.getFechaInscripcion());
-                    alumnos.add(row);
-                }
-            }
-            model.put("alumnos", alumnos);
-            System.out.println("Materia: " + materia);
-            System.out.println("Profesor: " + profesor);
-            System.out.println("Alumnos inscriptos: " + alumnos.size());
-            for (Map<String,Object> row : alumnos) {
-                System.out.println(row);
-            }
-
-            // Ese model es lo que Mustache recibe
             return new ModelAndView(model, "materiaForm.mustache");
         }, new MustacheTemplateEngine());
 
@@ -1168,11 +1508,13 @@ public class App {
         // Solo se muestra el boton "Inscribirse" cuando hay un periodo ACTIVO para MATERIAS.
         // GET /materias/disponibles
         get("/materias/disponibles", (req, res) -> {
-            Object sessionUserId = req.session().attribute("userId");
-            int userId = ((Number) sessionUserId).intValue();
+            Integer profileId = getSessionProfileId(req);
+            if (profileId == null) {
+                res.redirect("/dashboard?error=Solo los alumnos pueden inscribirse a materias.");
+                return null;
+            }
 
-            // Buscar el alumno asociado al usuario de sesion (por id compartido)
-            Alumno alumno = Alumno.findById(userId);
+            Alumno alumno = Alumno.findById(profileId);
             if (alumno == null) {
                 res.redirect("/dashboard?error=Solo los alumnos pueden inscribirse a materias.");
                 return null;
@@ -1199,7 +1541,7 @@ public class App {
                 row.put("codigo",      m.getCodigo());
                 row.put("descripcion", m.getDescripcion());
 
-                AlumnoMateria am = AlumnoMateria.findByAlumnoIdAndMateriaId(userId,
+                AlumnoMateria am = AlumnoMateria.findByAlumnoIdAndMateriaId(profileId,
                         ((Number) m.getId()).intValue());
                 row.put("inscripto", am != null);
                 row.put("fechaInscripcion", am != null ? am.getFechaInscripcion() : null);
@@ -1218,10 +1560,13 @@ public class App {
         // INSCRIBIRSE A UNA MATERIA
         // POST /materia/inscribirse/:id
         post("/materia/inscribirse/:id", (req, res) -> {
-            Object sessionUserId = req.session().attribute("userId");
-            int userId = ((Number) sessionUserId).intValue();
+            Integer profileId = getSessionProfileId(req);
+            if (profileId == null) {
+                res.redirect("/dashboard?error=Solo los alumnos pueden inscribirse a materias.");
+                return null;
+            }
 
-            Alumno alumno = Alumno.findById(userId);
+            Alumno alumno = Alumno.findById(profileId);
             if (alumno == null) {
                 res.redirect("/dashboard?error=Solo los alumnos pueden inscribirse a materias.");
                 return null;
@@ -1245,7 +1590,7 @@ public class App {
             }
 
             // Validar doble inscripcion
-            AlumnoMateria existente = AlumnoMateria.findByAlumnoIdAndMateriaId(userId, materiaId);
+            AlumnoMateria existente = AlumnoMateria.findByAlumnoIdAndMateriaId(profileId, materiaId);
             if (existente != null) {
                 res.redirect("/materias/disponibles?error="
                         + java.net.URLEncoder.encode(
@@ -1257,7 +1602,7 @@ public class App {
             try {
                 String hoy = java.time.LocalDate.now().toString();
                 AlumnoMateria am = new AlumnoMateria();
-                am.setAlumnoId(userId);
+                am.setAlumnoId(profileId);
                 am.setMateriaId(materiaId);
                 am.setFechaInscripcion(hoy);
                 am.saveIt();
@@ -1267,7 +1612,7 @@ public class App {
                                 "Te inscribiste correctamente en " + materia.getNombre() + ".",
                                 "UTF-8"));
             } catch (Exception ex) {
-                System.err.println("ERROR al inscribir alumno " + userId
+                System.err.println("ERROR al inscribir alumno " + profileId
                         + " en materia " + materiaId + ": " + ex.getMessage());
                 res.redirect("/materias/disponibles?error=No se pudo completar la inscripcion. Intentá nuevamente.");
             }
@@ -1277,10 +1622,13 @@ public class App {
         // MIS MATERIAS — lista las materias en que el alumno esta inscripto.
         // GET /mis-materias
         get("/mis-materias", (req, res) -> {
-            Object sessionUserId = req.session().attribute("userId");
-            int userId = ((Number) sessionUserId).intValue();
+            Integer profileId = getSessionProfileId(req);
+            if (profileId == null) {
+                res.redirect("/dashboard?error=Solo los alumnos pueden acceder a esta seccion.");
+                return null;
+            }
 
-            Alumno alumno = Alumno.findById(userId);
+            Alumno alumno = Alumno.findById(profileId);
             if (alumno == null) {
                 res.redirect("/dashboard?error=Solo los alumnos pueden acceder a esta seccion.");
                 return null;
@@ -1290,7 +1638,7 @@ public class App {
             model.put("alumnoNombre",   alumno.getNombre());
             model.put("alumnoApellido", alumno.getApellido());
 
-            List<AlumnoMateria> inscripciones = AlumnoMateria.findByAlumnoId(userId);
+            List<AlumnoMateria> inscripciones = AlumnoMateria.findByAlumnoId(profileId);
             List<Map<String, Object>> materias = new ArrayList<>();
             for (AlumnoMateria am : inscripciones) {
                 Map<String, Object> row = new HashMap<>();
@@ -1398,10 +1746,13 @@ public class App {
         // Solo habilita la inscripcion cuando hay un periodo ACTIVO para EXAMENES.
         // GET /examenes/disponibles
         get("/examenes/disponibles", (req, res) -> {
-            Object sessionUserId = req.session().attribute("userId");
-            int userId = ((Number) sessionUserId).intValue();
+            Integer profileId = getSessionProfileId(req);
+            if (profileId == null) {
+                res.redirect("/dashboard?error=Solo los alumnos pueden inscribirse a examenes.");
+                return null;
+            }
 
-            Alumno alumno = Alumno.findById(userId);
+            Alumno alumno = Alumno.findById(profileId);
             if (alumno == null) {
                 res.redirect("/dashboard?error=Solo los alumnos pueden inscribirse a examenes.");
                 return null;
@@ -1435,7 +1786,7 @@ public class App {
                 row.put("materiaCodigo", mat != null ? mat.getCodigo() : "");
 
                 InscripcionExamen ie = InscripcionExamen.findByAlumnoIdAndExamenId(
-                        userId, ((Number) e.getId()).intValue());
+                        profileId, ((Number) e.getId()).intValue());
                 row.put("inscripto",         ie != null);
                 row.put("fechaInscripcion",  ie != null ? ie.getFechaInscripcion() : null);
 
@@ -1454,10 +1805,13 @@ public class App {
         // INSCRIBIRSE A UN EXAMEN
         // POST /examen/inscribirse/:id
         post("/examen/inscribirse/:id", (req, res) -> {
-            Object sessionUserId = req.session().attribute("userId");
-            int userId = ((Number) sessionUserId).intValue();
+            Integer profileId = getSessionProfileId(req);
+            if (profileId == null) {
+                res.redirect("/dashboard?error=Solo los alumnos pueden inscribirse a examenes.");
+                return null;
+            }
 
-            Alumno alumno = Alumno.findById(userId);
+            Alumno alumno = Alumno.findById(profileId);
             if (alumno == null) {
                 res.redirect("/dashboard?error=Solo los alumnos pueden inscribirse a examenes.");
                 return null;
@@ -1481,7 +1835,7 @@ public class App {
             }
 
             // Validar doble inscripcion
-            InscripcionExamen existente = InscripcionExamen.findByAlumnoIdAndExamenId(userId, examenId);
+            InscripcionExamen existente = InscripcionExamen.findByAlumnoIdAndExamenId(profileId, examenId);
             if (existente != null) {
                 Materia mat = Materia.findById(examen.getMateriaId());
                 String nombreMat = mat != null ? mat.getNombre() : "ese examen";
@@ -1495,7 +1849,7 @@ public class App {
             try {
                 String hoy = java.time.LocalDate.now().toString();
                 InscripcionExamen ie = new InscripcionExamen();
-                ie.setAlumnoId(userId);
+                ie.setAlumnoId(profileId);
                 ie.setExamenId(examenId);
                 ie.setFechaInscripcion(hoy);
                 ie.saveIt();
@@ -1507,7 +1861,7 @@ public class App {
                                 "Te inscribiste correctamente al examen de " + nombreMat + ".",
                                 "UTF-8"));
             } catch (Exception ex) {
-                System.err.println("ERROR al inscribir alumno " + userId
+                System.err.println("ERROR al inscribir alumno " + profileId
                         + " en examen " + examenId + ": " + ex.getMessage());
                 res.redirect("/examenes/disponibles?error=No se pudo completar la inscripcion. Intentá nuevamente.");
             }
@@ -1517,10 +1871,13 @@ public class App {
         // MIS EXAMENES — lista los examenes a los que el alumno esta inscripto.
         // GET /mis-examenes
         get("/mis-examenes", (req, res) -> {
-            Object sessionUserId = req.session().attribute("userId");
-            int userId = ((Number) sessionUserId).intValue();
+            Integer profileId = getSessionProfileId(req);
+            if (profileId == null) {
+                res.redirect("/dashboard?error=Solo los alumnos pueden acceder a esta seccion.");
+                return null;
+            }
 
-            Alumno alumno = Alumno.findById(userId);
+            Alumno alumno = Alumno.findById(profileId);
             if (alumno == null) {
                 res.redirect("/dashboard?error=Solo los alumnos pueden acceder a esta seccion.");
                 return null;
@@ -1530,7 +1887,7 @@ public class App {
             model.put("alumnoNombre",   alumno.getNombre());
             model.put("alumnoApellido", alumno.getApellido());
 
-            List<InscripcionExamen> inscripciones = InscripcionExamen.findByAlumnoId(userId);
+            List<InscripcionExamen> inscripciones = InscripcionExamen.findByAlumnoId(profileId);
             List<Map<String, Object>> examenes = new ArrayList<>();
             for (InscripcionExamen ie : inscripciones) {
                 Map<String, Object> row = new HashMap<>();
@@ -1566,10 +1923,13 @@ public class App {
         // Solo muestra filas donde nota IS NOT NULL.
         // GET /mis-notas
         get("/mis-notas", (req, res) -> {
-            Object sessionUserId = req.session().attribute("userId");
-            int userId = ((Number) sessionUserId).intValue();
+            Integer profileId = getSessionProfileId(req);
+            if (profileId == null) {
+                res.redirect("/dashboard?error=Solo los alumnos pueden consultar sus notas.");
+                return null;
+            }
 
-            Alumno alumno = Alumno.findById(userId);
+            Alumno alumno = Alumno.findById(profileId);
             if (alumno == null) {
                 res.redirect("/dashboard?error=Solo los alumnos pueden consultar sus notas.");
                 return null;
@@ -1580,7 +1940,7 @@ public class App {
             model.put("alumnoApellido", alumno.getApellido());
 
             // Leer de alumnos_materias — la misma tabla que usa el profesor
-            List<AlumnoMateria> inscripciones = AlumnoMateria.findByAlumnoId(userId);
+            List<AlumnoMateria> inscripciones = AlumnoMateria.findByAlumnoId(profileId);
             List<Map<String, Object>> notas = new ArrayList<>();
             for (AlumnoMateria am : inscripciones) {
                 // Solo incluir filas con nota cargada
@@ -1677,7 +2037,36 @@ public class App {
             model.put("tipo", tipo);
             if ("alumno".equals(tipo))   model.put("esAlumno", true);
             if ("profesor".equals(tipo)) model.put("esProfesor", true);
+            if ("admin".equals(tipo))    model.put("esAdmin", true);
         }
+    }
+
+    // Helper: obtener el profileId para alumno/profesor desde sesión
+    private static Integer getSessionProfileId(spark.Request req) {
+        String tipo = req.session().attribute("userTipo");
+        if ("alumno".equals(tipo) || "profesor".equals(tipo)) {
+            Object profileId = req.session().attribute("profileId");
+            if (profileId instanceof Number) {
+                return ((Number) profileId).intValue();
+            }
+            if (profileId instanceof String) {
+                try {
+                    return Integer.parseInt((String) profileId);
+                } catch (NumberFormatException ignored) {
+                }
+            }
+            Object userId = req.session().attribute("userId");
+            if (userId instanceof Number) {
+                return ((Number) userId).intValue();
+            }
+            if (userId instanceof String) {
+                try {
+                    return Integer.parseInt((String) userId);
+                } catch (NumberFormatException ignored) {
+                }
+            }
+        }
+        return null;
     }
 
     /**

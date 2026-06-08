@@ -73,8 +73,17 @@
             <a href="/" class="ml-auto text-xs text-gray-400 hover:text-gray-600">Cambiar &rarr;</a>
         </div>
         {{/esProfesor}}
+        {{#esAdmin}}
+        <div class="flex items-center mb-5 p-3 bg-yellow-50 rounded-lg">
+            <svg class="w-6 h-6 text-yellow-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c1.656 0 3-1.344 3-3s-1.344-3-3-3-3 1.344-3 3 1.344 3 3 3zm0 2c-2.761 0-5 2.239-5 5v1h10v-1c0-2.761-2.239-5-5-5z"/>
+            </svg>
+            <span class="text-yellow-700 font-semibold">Ingreso como Administrador</span>
+            <a href="/" class="ml-auto text-xs text-gray-400 hover:text-gray-600">Cambiar &rarr;</a>
+        </div>
+        {{/esAdmin}}
 
-        <form action="/login" method="post" class="space-y-4">
+        <form action="{{#esAdmin}}/admin/login{{/esAdmin}}{{^esAdmin}}/login{{/esAdmin}}" method="post" class="space-y-4">
             <input type="hidden" name="tipo" value="{{tipo}}">
             <div>
                 <label for="username" class="block text-gray-700 text-sm font-medium mb-1">Nombre de Usuario:</label>
@@ -98,8 +107,15 @@
                 Iniciar Sesión como Profesor
             </button>
             {{/esProfesor}}
+            {{#esAdmin}}
+            <button type="submit"
+                    class="w-full bg-yellow-600 text-white py-2 px-4 rounded-lg hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-yellow-500 font-semibold transition">
+                Iniciar Sesión como Administrador
+            </button>
+            {{/esAdmin}}
         </form>
 
+        {{^esAdmin}}
         <div class="border-t border-gray-100 pt-4 mt-4 text-center space-y-2">
             <p class="text-gray-500 text-sm">¿No tenés cuenta?</p>
             {{#esAlumno}}
@@ -109,6 +125,7 @@
             <a href="/profesor/registrar" class="text-green-600 hover:underline text-sm font-medium">Registrarse como Profesor</a>
             {{/esProfesor}}
         </div>
+        {{/esAdmin}}
         {{/tipo}}
 
     </div>

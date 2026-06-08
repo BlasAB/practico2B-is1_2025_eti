@@ -2,33 +2,85 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Registrar Materia</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{#esEdicion}}Editar Materia{{/esEdicion}}{{^esEdicion}}Nueva Materia{{/esEdicion}}</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 min-h-screen p-6">
-    <div>
-        <label class="block text-gray-700 font-medium">Profesor asignado</label>
-        {{#profesor}}
-            <p class="text-violet-700 font-semibold">{{nombre}} {{apellido}}</p>
-        {{/profesor}}
-        {{^profesor}}
-            <p class="text-gray-500">No hay profesor asignado.</p>
-        {{/profesor}}
+    <div class="max-w-xl mx-auto">
+
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-8">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-800">
+                    {{#esEdicion}}Editar Materia{{/esEdicion}}
+                    {{^esEdicion}}Nueva Materia{{/esEdicion}}
+                </h1>
+                <p class="text-gray-500 text-sm mt-1">
+                    {{#esEdicion}}Modificá los datos de la materia.{{/esEdicion}}
+                    {{^esEdicion}}Completá los datos para registrar una nueva materia.{{/esEdicion}}
+                </p>
+            </div>
+            <a href="/materias/listar" class="text-gray-500 hover:text-gray-700 text-sm">&larr; Volver a Materias</a>
         </div>
 
-        <div>
-        <label class="block text-gray-700 font-medium">Alumnos inscriptos</label>
-        <ul class="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-1">
-            {{#alumnos}}
-                <li>{{nombre}} {{apellido}} — {{correo}}
-                (nota: {{nota}} / fecha: {{fecha}})
-            </li>
-            {{/alumnos}}
-            {{^alumnos}}
-                <li class="text-gray-500">No hay alumnos inscriptos.</li>
-            {{/alumnos}}
-        </ul>
-    </div>
+        {{#error}}
+        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-6">
+            {{error}}
+        </div>
+        {{/error}}
+        {{#successMessage}}
+        <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-lg mb-6">
+            {{successMessage}}
+        </div>
+        {{/successMessage}}
 
+        <div class="bg-white rounded-2xl shadow-md overflow-hidden">
+            <div class="px-6 py-4 bg-violet-50 border-b border-violet-100">
+                <h2 class="text-xl font-bold text-violet-700">
+                    {{#esEdicion}}Datos de la Materia{{/esEdicion}}
+                    {{^esEdicion}}Registrar Materia{{/esEdicion}}
+                </h2>
+            </div>
+
+            <div class="px-6 py-6">
+                <form action="{{#esEdicion}}/materia/editar/{{id}}{{/esEdicion}}{{^esEdicion}}/materia/registrar{{/esEdicion}}" method="POST" class="space-y-5">
+
+                    <div>
+                        <label for="nombre" class="block text-sm font-medium text-gray-700 mb-1">Nombre <span class="text-red-500">*</span></label>
+                        <input type="text" id="nombre" name="nombre" value="{{nombre}}" required
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500 text-sm">
+                    </div>
+
+                    <div>
+                        <label for="codigo" class="block text-sm font-medium text-gray-700 mb-1">Código <span class="text-red-500">*</span></label>
+                        <input type="text" id="codigo" name="codigo" value="{{codigo}}" required
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500 text-sm"
+                               placeholder="Ej: MAT101">
+                    </div>
+
+                    <div>
+                        <label for="descripcion" class="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
+                        <textarea id="descripcion" name="descripcion" rows="3"
+                                  class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500 text-sm resize-none"
+                                  placeholder="Descripción opcional de la materia...">{{descripcion}}</textarea>
+                    </div>
+
+                    <div class="flex gap-3 pt-2">
+                        <button type="submit"
+                                class="flex-1 bg-violet-600 text-white py-2 px-4 rounded-lg hover:bg-violet-700 transition font-semibold text-sm">
+                            {{#esEdicion}}Guardar Cambios{{/esEdicion}}
+                            {{^esEdicion}}Registrar Materia{{/esEdicion}}
+                        </button>
+                        <a href="/materias/listar"
+                           class="flex-1 text-center border border-gray-300 text-gray-600 py-2 px-4 rounded-lg hover:bg-gray-50 transition font-semibold text-sm">
+                            Cancelar
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+    </div>
 </body>
 </html>
