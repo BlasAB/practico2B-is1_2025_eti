@@ -41,25 +41,24 @@ public class App {
         DBConfigSingleton dbConfig = DBConfigSingleton.getInstance();
 
         before((req, res) -> {
-            try {
-                System.out.println(
-                        "[DB] Conectando a: "
-                                + dbConfig.getDbUrl());
-
+            if (!Base.hasConnection()) {
                 Base.open(
-                        dbConfig.getDriver(),
-                        dbConfig.getDbUrl(),
-                        dbConfig.getUser(),
-                        dbConfig.getPass());
-
-                System.out.println(
-                        "[DB] ActiveJDBC conectado correctamente");
-                System.out.println(req.url());
-            } catch (Exception e) {
-                System.err.println("Error al abrir conexion: " + e.getMessage());
-                halt(500, "{\"error\": \"Error interno del servidor.\"}");
+                    dbConfig.getDriver(),
+                    dbConfig.getDbUrl(),
+                    dbConfig.getUser(),
+                    dbConfig.getPass()
+                );
+                System.out.println("[DB] ActiveJDBC conectado correctamente");
             }
         });
+
+        after((req, res) -> {
+            if (Base.hasConnection()) {
+                Base.close();
+                System.out.println("[DB] Conexión cerrada correctamente");
+            }
+        });
+
 
         before((req, res) -> {
             String path = req.pathInfo();
@@ -428,6 +427,12 @@ public class App {
         // ABM DE MATERIAS
         // ============================================================
 
+                
+        get("/materia/registrar", (req, res) -> {
+            Map<String, Object> model = new HashMap<>();
+            return new ModelAndView(model, "materiaForm.mustache");
+        }, new MustacheTemplateEngine());
+
         post("/materia/registrar", (req, res) -> {
             Materia m = new Materia();
             m.set("nombre",      req.queryParams("nombre"));
@@ -457,6 +462,49 @@ public class App {
             if (ok  != null && !ok.isEmpty())  model.put("successMessage", ok);
             return new ModelAndView(model, "materiasList.mustache");
         }, new MustacheTemplateEngine());
+
+        get("/materia/editar/:id", (req, res) -> {
+            int id = Integer.parseInt(req.params(":id"));
+            Materia materia = Materia.findById(id);
+
+            // Acá armás el model
+            Map<String, Object> model = new HashMap<>();
+            model.put("materia", materia);
+
+            // Profesor asignado
+            Profesor profesor = Profesor.findFirst(
+                "id IN (SELECT profesor_id FROM profesor_materias WHERE materia_id = ?)", id
+            );
+            model.put("profesor", profesor);
+
+            // Alumnos inscriptos
+            List<AlumnoMateria> inscripciones = AlumnoMateria.findByMateriaId(id);
+            List<Map<String, Object>> alumnos = new ArrayList<>();
+            for (AlumnoMateria am : inscripciones) {
+                Alumno a = Alumno.findById(am.getAlumnoId());
+                if (a != null) {
+                    Map<String, Object> row = new HashMap<>();
+                    row.put("nombre", a.getNombre());
+                    row.put("apellido", a.getApellido());
+                    row.put("correo", a.getCorreo());
+                    row.put("nota", am.getNota());
+                    row.put("fecha", am.getFechaInscripcion());
+                    alumnos.add(row);
+                }
+            }
+            model.put("alumnos", alumnos);
+            System.out.println("Materia: " + materia);
+            System.out.println("Profesor: " + profesor);
+            System.out.println("Alumnos inscriptos: " + alumnos.size());
+            for (Map<String,Object> row : alumnos) {
+                System.out.println(row);
+            }
+
+            // Ese model es lo que Mustache recibe
+            return new ModelAndView(model, "materiaForm.mustache");
+        }, new MustacheTemplateEngine());
+
+
 
         post("/materia/editar/:id", (req, res) -> {
             int id = Integer.parseInt(req.params(":id"));
@@ -1567,6 +1615,57 @@ public class App {
             return new ModelAndView(model, "misNotas.mustache");
         }, new MustacheTemplateEngine());
 
+        get("/alumnos/listar", (req, res) -> {
+            Map<String, Object> model = new HashMap<>();
+            List<Alumno> alumnosRaw = Alumno.findAll();
+            List<Map<String, Object>> alumnos = new ArrayList<>();
+
+            for (Alumno a : alumnosRaw) {
+                Map<String, Object> row = new HashMap<>();
+                row.put("id", a.getId());
+                row.put("nombre", a.getNombre());
+                row.put("apellido", a.getApellido());
+                row.put("correo", a.getCorreo());
+                row.put("dni", a.getDni());
+                alumnos.add(row);
+            }
+
+            model.put("alumnos", alumnos);
+            return new ModelAndView(model, "alumnosList.mustache");
+        }, new MustacheTemplateEngine());
+
+
+        get("/carrera/:id/materias", (req, res) -> {
+            int carreraId = Integer.parseInt(req.params(":id"));
+            Carrera carrera = Carrera.findById(carreraId);
+
+            List<Materia> materias = Materia.find(
+                "id IN (SELECT materia_id FROM carrera_materias WHERE carrera_id = ?)", carreraId
+            );
+
+            Map<String, Object> model = new HashMap<>();
+            model.put("carrera", carrera);
+            model.put("materias", materias);
+
+            return new ModelAndView(model, "carreraMaterias.mustache");
+        }, new MustacheTemplateEngine());
+
+        get("/profesor/:id/materias", (req, res) -> {
+            int profesorId = Integer.parseInt(req.params(":id"));
+            Profesor profesor = Profesor.findById(profesorId);
+
+            List<Materia> materias = Materia.find(
+                "id IN (SELECT materia_id FROM profesor_materias WHERE profesor_id = ?)", profesorId
+            );
+
+            Map<String, Object> model = new HashMap<>();
+            model.put("profesor", profesor);
+            model.put("materias", materias);
+
+            return new ModelAndView(model, "profesorMaterias.mustache");
+        }, new MustacheTemplateEngine());
+
+
     } // fin main()
 
     // ----------------------------------------------------------------
@@ -1623,5 +1722,7 @@ public class App {
             default: return "Año " + anio;
         }
     }
+
+
 
 }
