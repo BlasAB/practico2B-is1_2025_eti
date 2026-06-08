@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Registrar Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+    <div class="bg-white p-8 rounded shadow-md w-full max-w-md">
+        <h1 class="text-2xl font-bold mb-4">Registrar Administrador</h1>
+        {{#errorMessage}}
+        <div class="bg-red-100 text-red-700 p-2 rounded mb-4">{{errorMessage}}</div>
+        {{/errorMessage}}
+        <form action="/admin/registrar" method="post" class="space-y-4">
+            <div>
+                <label for="username" class="block text-sm font-medium">Usuario</label>
+                <input type="text" id="username" name="username" required class="w-full border rounded px-3 py-2">
+            </div>
+            <div>
+                <label for="password" class="block text-sm font-medium">Contraseña</label>
+                <input type="password" id="password" name="password" required class="w-full border rounded px-3 py-2">
+            </div>
+            <button type="submit" class="w-full bg-yellow-600 text-white py-2 rounded hover:bg-yellow-700">
+                Registrar Admin
+            </button>
+        </form>
+    </div>
+</body>
+</html>

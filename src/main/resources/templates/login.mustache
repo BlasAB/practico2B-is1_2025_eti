@@ -43,6 +43,13 @@
             </a>
         </div>
 
+        <!-- Link para admin -->
+        <div class="mt-4 text-center">
+            <a href="/admin/login" class="text-yellow-600 hover:underline font-medium">
+                Iniciar sesión como Admin
+            </a>
+        </div>
+
         <div class="border-t border-gray-100 pt-4 text-center space-y-2">
             <p class="text-gray-500 text-sm">¿No tenés cuenta?</p>
             <div class="flex justify-center gap-4">
@@ -57,36 +64,14 @@
         <!-- Formulario de login -->
         {{#esAlumno}}
         <div class="flex items-center mb-5 p-3 bg-blue-50 rounded-lg">
-            <svg class="w-6 h-6 text-blue-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
-            </svg>
             <span class="text-blue-700 font-semibold">Ingreso como Alumno</span>
             <a href="/" class="ml-auto text-xs text-gray-400 hover:text-gray-600">Cambiar &rarr;</a>
         </div>
-        {{/esAlumno}}
-        {{#esProfesor}}
-        <div class="flex items-center mb-5 p-3 bg-green-50 rounded-lg">
-            <svg class="w-6 h-6 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/>
-            </svg>
-            <span class="text-green-700 font-semibold">Ingreso como Profesor</span>
-            <a href="/" class="ml-auto text-xs text-gray-400 hover:text-gray-600">Cambiar &rarr;</a>
-        </div>
-        {{/esProfesor}}
-        {{#esAdmin}}
-        <div class="flex items-center mb-5 p-3 bg-yellow-50 rounded-lg">
-            <svg class="w-6 h-6 text-yellow-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c1.656 0 3-1.344 3-3s-1.344-3-3-3-3 1.344-3 3 1.344 3 3 3zm0 2c-2.761 0-5 2.239-5 5v1h10v-1c0-2.761-2.239-5-5-5z"/>
-            </svg>
-            <span class="text-yellow-700 font-semibold">Ingreso como Administrador</span>
-            <a href="/" class="ml-auto text-xs text-gray-400 hover:text-gray-600">Cambiar &rarr;</a>
-        </div>
-        {{/esAdmin}}
 
-        <form action="{{#esAdmin}}/admin/login{{/esAdmin}}{{^esAdmin}}/login{{/esAdmin}}" method="post" class="space-y-4">
+        <form action="/login" method="post" class="space-y-4">
             <input type="hidden" name="tipo" value="{{tipo}}">
             <div>
-                <label for="username" class="block text-gray-700 text-sm font-medium mb-1">Nombre de Usuario:</label>
+                <label for="username" class="block text-gray-700 text-sm font-medium mb-1">Usuario:</label>
                 <input type="text" id="username" name="username" required
                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
             </div>
@@ -95,35 +80,65 @@
                 <input type="password" id="password" name="password" required
                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
             </div>
-            {{#esAlumno}}
             <button type="submit"
                     class="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold transition">
                 Iniciar Sesión como Alumno
             </button>
-            {{/esAlumno}}
-            {{#esProfesor}}
+        </form>
+        {{/esAlumno}}
+        {{#esProfesor}}
+        <div class="flex items-center mb-5 p-3 bg-green-50 rounded-lg">
+            <span class="text-green-700 font-semibold">Ingreso como Profesor</span>
+            <a href="/" class="ml-auto text-xs text-gray-400 hover:text-gray-600">Cambiar &rarr;</a>
+        </div>
+
+        <form action="/login" method="post" class="space-y-4">
+            <input type="hidden" name="tipo" value="{{tipo}}">
+            <div>
+                <label for="username" class="block text-gray-700 text-sm font-medium mb-1">Usuario:</label>
+                <input type="text" id="username" name="username" required
+                       class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500">
+            </div>
+            <div>
+                <label for="password" class="block text-gray-700 text-sm font-medium mb-1">Contraseña:</label>
+                <input type="password" id="password" name="password" required
+                       class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500">
+            </div>
             <button type="submit"
                     class="w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 font-semibold transition">
                 Iniciar Sesión como Profesor
             </button>
-            {{/esProfesor}}
-            {{#esAdmin}}
+        </form>
+        {{/esProfesor}}
+
+        {{#esAdmin}}
+        <div class="flex items-center mb-5 p-3 bg-yellow-50 rounded-lg">
+            <span class="text-yellow-700 font-semibold">Ingreso como Administrador</span>
+            <a href="/" class="ml-auto text-xs text-gray-400 hover:text-gray-600">Cambiar &rarr;</a>
+        </div>
+
+        <form action="/admin/login" method="post" class="space-y-4">
+            <input type="hidden" name="tipo" value="{{tipo}}">
+            <div>
+                <label for="username" class="block text-gray-700 text-sm font-medium mb-1">Usuario:</label>
+                <input type="text" id="username" name="username" required
+                       class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500">
+            </div>
+            <div>
+                <label for="password" class="block text-gray-700 text-sm font-medium mb-1">Contraseña:</label>
+                <input type="password" id="password" name="password" required
+                       class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500">
+            </div>
             <button type="submit"
                     class="w-full bg-yellow-600 text-white py-2 px-4 rounded-lg hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-yellow-500 font-semibold transition">
                 Iniciar Sesión como Administrador
             </button>
-            {{/esAdmin}}
         </form>
 
-        {{^esAdmin}}
-        <div class="border-t border-gray-100 pt-4 mt-4 text-center space-y-2">
-            <p class="text-gray-500 text-sm">¿No tenés cuenta?</p>
-            {{#esAlumno}}
-            <a href="/alumno/registrar" class="text-blue-600 hover:underline text-sm font-medium">Registrarse como Alumno</a>
-            {{/esAlumno}}
-            {{#esProfesor}}
-            <a href="/profesor/registrar" class="text-green-600 hover:underline text-sm font-medium">Registrarse como Profesor</a>
-            {{/esProfesor}}
+        <div class="mt-4 text-center">
+            <a href="/admin/registrar" class="text-violet-600 hover:underline font-medium">
+                Registrarse como Admin
+            </a>
         </div>
         {{/esAdmin}}
         {{/tipo}}

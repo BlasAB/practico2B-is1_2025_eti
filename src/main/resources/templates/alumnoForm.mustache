@@ -61,6 +61,14 @@
                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
             </div>
 
+            <label for="carrera" class="block text-gray-700 text-sm font-medium mb-1">Carrera:</label>
+            <select id="carrera" name="carrera_id" required
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="1">Licenciatura en Ciencias de la Computación</option>
+                <option value="2">Profesorado en Inglés</option>
+            </select>
+
+
             {{^esEdicion}}
             <!-- Credenciales de acceso (solo en registro) -->
             <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide pt-2">Credenciales de acceso</p>

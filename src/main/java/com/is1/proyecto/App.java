@@ -1,5 +1,7 @@
 package com.is1.proyecto;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -54,41 +56,22 @@ public class App {
 
         after((req, res) -> {
             if (Base.hasConnection()) {
-                Base.close();
-                System.out.println("[DB] Conexión cerrada correctamente");
-            }
-        });
-
-
-        // Filter: enviar a admin login si no hay sesion y bloquear acceso de no-admins
-        before("/admin/*", (req, res) -> {
-            String path = req.pathInfo();
-            if (path.equals("/admin/login")) {
-                return;
-            }
-
-            Boolean loggedIn = req.session().attribute("loggedIn");
-            if (loggedIn == null || !loggedIn) {
-                res.redirect("/admin/login?error=" + java.net.URLEncoder.encode("Debes iniciar sesion de admin para acceder a esta pagina.", "UTF-8"));
-                halt();
-            }
-
-            String tipo = req.session().attribute("userTipo");
-            if (!"admin".equals(tipo)) {
-                if ("alumno".equals(tipo) || "profesor".equals(tipo)) {
-                    res.redirect("/dashboard?error=" + java.net.URLEncoder.encode("No tenes permiso para acceder al panel de administracion.", "UTF-8"));
-                } else {
-                    res.redirect("/?error=" + java.net.URLEncoder.encode("No tenes permiso para acceder a esta pagina.", "UTF-8"));
+                try {
+                    Base.close();
+                    System.out.println("[DB] Conexión cerrada correctamente");
+                } catch (Exception e) {
+                    System.err.println("Error al cerrar conexion: " + e.getMessage());
                 }
-                halt();
             }
         });
+
 
         before((req, res) -> {
             String path = req.pathInfo();
             if (path.equals("/")
                     || path.equals("/login")
                     || path.equals("/admin/login")
+                    || path.equals("/admin/registrar")   // ✅ agregalo acá
                     || path.equals("/logout")
                     || path.equals("/alumno/registrar")
                     || path.equals("/profesor/registrar")
@@ -108,14 +91,6 @@ public class App {
             }
         });
 
-
-        after((req, res) -> {
-            try {
-                Base.close();
-            } catch (Exception e) {
-                System.err.println("Error al cerrar conexion: " + e.getMessage());
-            }
-        });
 
         // ============================================================
         // AUTENTICACIÓN
@@ -143,10 +118,15 @@ public class App {
             return null;
         });
 
+
+
+
         get("/admin/login", (req, res) -> {
             Map<String, Object> model = new HashMap<>();
             String err = req.queryParams("error");
+            String msg = req.queryParams("message");
             if (err != null && !err.isEmpty()) model.put("errorMessage", err);
+            if (msg != null && !msg.isEmpty()) model.put("successMessage", msg);
             model.put("tipo", "admin");
             model.put("esAdmin", true);
             return new ModelAndView(model, "login.mustache");
@@ -161,13 +141,14 @@ public class App {
 
             if (username == null || username.isEmpty() || password == null || password.isEmpty()) {
                 res.status(400);
-                model.put("errorMessage", "El nombre de usuario y la contrasena son requeridos.");
+                model.put("errorMessage", "El nombre de usuario y la contraseña son requeridos.");
                 return new ModelAndView(model, "login.mustache");
             }
 
-            if ("admin".equals(username) && "admin".equals(password)) {
-                req.session(true).attribute("currentUserUsername", "admin");
-                req.session().attribute("userId", 0);
+            User user = User.findFirst("name = ? AND perfil_tipo = ?", username, "admin");
+            if (user != null && BCrypt.checkpw(password, user.getString("password"))) {
+                req.session(true).attribute("currentUserUsername", user.getString("name"));
+                req.session().attribute("userId", user.getId());
                 req.session().attribute("loggedIn", true);
                 req.session().attribute("userTipo", "admin");
                 res.redirect("/admin/panel");
@@ -175,9 +156,52 @@ public class App {
             }
 
             res.status(401);
-            model.put("errorMessage", "Usuario o contrasena incorrectos.");
+            model.put("errorMessage", "Usuario o contraseña incorrectos.");
             return new ModelAndView(model, "login.mustache");
         }, new MustacheTemplateEngine());
+
+
+        // 🔹 Registro admin
+        get("/admin/registrar", (req, res) -> {
+            Map<String, Object> model = new HashMap<>();
+            String err = req.queryParams("error");
+            if (err != null && !err.isEmpty()) model.put("errorMessage", err);
+            return new ModelAndView(model, "adminForm.mustache");
+        }, new MustacheTemplateEngine());
+
+        post("/admin/registrar", (req, res) -> {
+            String username = req.queryParams("username");
+            String password = req.queryParams("password");
+
+            if (username == null || username.isEmpty() || password == null || password.isEmpty()) {
+                res.redirect("/admin/registrar?error=" + URLEncoder.encode(
+                    "El nombre de usuario y la contraseña son requeridos.", StandardCharsets.UTF_8));
+                return null;
+            }
+
+            try {
+                User existing = User.findFirst("name = ? AND perfil_tipo = ?", username, "admin");
+                if (existing != null) {
+                    res.redirect("/admin/registrar?error=" + URLEncoder.encode(
+                        "Ya existe un admin con ese nombre.", StandardCharsets.UTF_8));
+                    return null;
+                }
+
+                User admin = new User();
+                admin.set("name", username);
+                admin.set("password", BCrypt.hashpw(password, BCrypt.gensalt()));
+                admin.set("perfil_tipo", "admin");
+                admin.saveIt();
+
+                res.redirect("/admin/login?message=" + URLEncoder.encode(
+                    "Admin registrado correctamente. Ya podés iniciar sesión.", StandardCharsets.UTF_8));
+            } catch (Exception e) {
+                System.err.println("ERROR al registrar admin: " + e.getMessage());
+                res.redirect("/admin/registrar?error=" + URLEncoder.encode(
+                    "No se pudo registrar el admin.", StandardCharsets.UTF_8));
+            }
+            return null;
+        });
 
         post("/login", (req, res) -> {
             Map<String, Object> model = new HashMap<>();
@@ -187,7 +211,7 @@ public class App {
 
             if (username == null || username.isEmpty() || password == null || password.isEmpty()) {
                 res.status(400);
-                model.put("errorMessage", "El nombre de usuario y la contrasena son requeridos.");
+                model.put("errorMessage", "El nombre de usuario y la contraseña son requeridos.");
                 addTipo(model, tipo);
                 return new ModelAndView(model, "login.mustache");
             }
@@ -195,59 +219,44 @@ public class App {
             User ac = User.findFirst("name = ?", username);
             if (ac == null) {
                 res.status(401);
-                model.put("errorMessage", "Usuario o contrasena incorrectos.");
+                model.put("errorMessage", "Usuario o contraseña incorrectos.");
                 addTipo(model, tipo);
                 return new ModelAndView(model, "login.mustache");
             }
 
+            // Validar contraseña con BCrypt
             if (BCrypt.checkpw(password, ac.getString("password"))) {
                 Integer perfilId = null;
-                if ("alumno".equals(tipo) || "profesor".equals(tipo)) {
-                    Object perfilIdObj = ac.get("perfil_id");
-                    if (perfilIdObj instanceof Integer) {
-                        perfilId = (Integer) perfilIdObj;
-                    } else if (perfilIdObj instanceof Number) {
-                        perfilId = ((Number) perfilIdObj).intValue();
-                    } else if (perfilIdObj instanceof String) {
-                        try {
-                            perfilId = Integer.parseInt((String) perfilIdObj);
-                        } catch (NumberFormatException ignored) {
-                        }
-                    }
-                    String perfilTipo = ac.getString("perfil_tipo");
-                    if (perfilId == null) {
-                        // Fallback para esquemas antiguos donde el id del usuario y el perfil coincidían.
-                        Object idObj = ac.getId();
-                        if (idObj instanceof Integer) {
-                            perfilId = (Integer) idObj;
-                        } else if (idObj instanceof Number) {
-                            perfilId = ((Number) idObj).intValue();
-                        } else if (idObj instanceof String) {
-                            try {
-                                perfilId = Integer.parseInt((String) idObj);
-                            } catch (NumberFormatException ignored) {
-                            }
-                        }
-                    }
-                    if (perfilTipo != null && !tipo.equals(perfilTipo)) {
-                        res.status(401);
-                        model.put("errorMessage", "Usuario o contrasena incorrectos.");
-                        addTipo(model, tipo);
-                        return new ModelAndView(model, "login.mustache");
-                    }
+                Object perfilIdObj = ac.get("perfil_id");
+                if (perfilIdObj instanceof Number) {
+                    perfilId = ((Number) perfilIdObj).intValue();
+                } else if (perfilIdObj instanceof String) {
+                    try { perfilId = Integer.parseInt((String) perfilIdObj); } catch (NumberFormatException ignored) {}
                 }
 
+                // Comparación flexible del tipo de perfil
+                String perfilTipo = ac.getString("perfil_tipo");
+                if (perfilTipo != null && tipo != null && !perfilTipo.trim().equalsIgnoreCase(tipo.trim())) {
+                    res.status(401);
+                    model.put("errorMessage", "Usuario o contraseña incorrectos.");
+                    addTipo(model, tipo);
+                    return new ModelAndView(model, "login.mustache");
+                }
+
+                // Crear sesión
                 req.session(true).attribute("currentUserUsername", username);
                 req.session().attribute("userId", ac.getId());
                 if (perfilId != null) req.session().attribute("profileId", perfilId);
                 req.session().attribute("loggedIn", true);
                 req.session().attribute("userTipo", tipo != null ? tipo : "user");
-                model.put("username", username);
-                addTipo(model, tipo);
-                return new ModelAndView(model, "dashboard.mustache");
+
+                // Redirigir al dashboard
+                res.redirect("/dashboard?message=" + URLEncoder.encode(
+                    "Inicio de sesión correcto.", StandardCharsets.UTF_8));
+                return null;
             } else {
                 res.status(401);
-                model.put("errorMessage", "Usuario o contrasena incorrectos.");
+                model.put("errorMessage", "Usuario o contraseña incorrectos.");
                 addTipo(model, tipo);
                 return new ModelAndView(model, "login.mustache");
             }
@@ -288,6 +297,7 @@ public class App {
             String apellido = req.queryParams("apellido");
             String correo   = req.queryParams("correo");
             String dni      = req.queryParams("dni");
+            String carreraIdStr = req.queryParams("carrera_id"); // nuevo
 
             if (username == null || username.isEmpty() || password == null || password.isEmpty()) {
                 res.redirect("/alumno/registrar?error=El nombre de usuario y la contrasena son requeridos.");
@@ -305,13 +315,20 @@ public class App {
                 res.redirect("/alumno/registrar?error=El DNI debe tener entre 7 y 8 digitos numericos.");
                 return null;
             }
+            if (carreraIdStr == null || carreraIdStr.isEmpty()) {
+                res.redirect("/alumno/registrar?error=Debes seleccionar una carrera.");
+                return null;
+            }
 
             try {
+                int carreraId = Integer.parseInt(carreraIdStr);
+
                 Alumno a = new Alumno();
                 a.setNombre(nombre);
                 a.setApellido(apellido);
                 a.setCorreo(correo);
                 a.setDni(dni);
+                a.set("carrera_id", carreraId); // guardar carrera
                 a.saveIt();
 
                 User u = new User();
@@ -329,6 +346,7 @@ public class App {
             return null;
         });
 
+
         get("/alumno/editar/:id", (req, res) -> {
             int id = Integer.parseInt(req.params(":id"));
             Alumno a = Alumno.findById(id);
@@ -343,8 +361,7 @@ public class App {
             model.put("apellido",  a.getApellido());
             model.put("correo",    a.getCorreo());
             model.put("dni",       a.getDni());
-            String err = req.queryParams("error");
-            if (err != null && !err.isEmpty()) model.put("error", err);
+            model.put("carreraId", a.getInteger("carrera_id")); // nuevo
             return new ModelAndView(model, "alumnoForm.mustache");
         }, new MustacheTemplateEngine());
 
@@ -359,6 +376,7 @@ public class App {
             String apellido = req.queryParams("apellido");
             String correo   = req.queryParams("correo");
             String dni      = req.queryParams("dni");
+            String carreraIdStr = req.queryParams("carrera_id");
 
             if (nombre == null || nombre.isEmpty() || apellido == null || apellido.isEmpty()) {
                 res.redirect("/alumno/editar/" + id + "?error=El nombre y apellido son requeridos.");
@@ -378,8 +396,10 @@ public class App {
                 a.set("apellido", apellido);
                 a.set("correo", correo);
                 a.set("dni", dni);
+                if (carreraIdStr != null && !carreraIdStr.isEmpty()) {
+                    a.set("carrera_id", Integer.parseInt(carreraIdStr));
+                }
                 a.saveIt();
-                // TODO: Implementar integración con listado de alumnos cuando se resuelva el issue correspondiente
                 res.redirect("/admin/panel?message=Alumno actualizado correctamente.");
             } catch (Exception e) {
                 System.err.println("ERROR al editar alumno: " + e.getMessage());
@@ -388,11 +408,12 @@ public class App {
             return null;
         });
 
+
         get("/alumno/eliminar/:id", (req, res) -> {
             int id = Integer.parseInt(req.params(":id"));
             Alumno a = Alumno.findById(id);
             if (a != null) a.delete();
-            // TODO: Implementar integración con listado de alumnos cuando se resuelva el issue correspondiente
+
             res.redirect("/admin/panel?message=Alumno eliminado correctamente.");
             return null;
         });
@@ -668,17 +689,22 @@ public class App {
             String apellido = req.queryParams("apellido");
             String correo   = req.queryParams("correo");
             String dni      = req.queryParams("dni");
+            String carreraIdStr = req.queryParams("carrera_id");
 
             if (username == null || username.isEmpty() || password == null || password.isEmpty()) {
                 res.redirect("/profesor/registrar?error=El nombre de usuario y la contrasena son requeridos.");
                 return null;
             }
+
             try {
+                int carreraId = Integer.parseInt(carreraIdStr);
+
                 Profesor p = new Profesor();
                 p.setNombre(nombre);
                 p.setApellido(apellido);
                 p.setCorreo(correo);
                 p.setDni(dni);
+                p.set("carrera_id", carreraId);
                 p.saveIt();
 
                 User u = new User();
@@ -695,6 +721,7 @@ public class App {
             }
             return null;
         });
+
 
         post("/profesor/editar/:id", (req, res) -> {
             int id = Integer.parseInt(req.params(":id"));
@@ -802,24 +829,38 @@ public class App {
         });
 
         get("/materias/listar", (req, res) -> {
-            Map<String, Object> model = new HashMap<>();
-            List<Materia> materiasRaw = Materia.findAll();
-            List<Map<String, Object>> materias = new ArrayList<>();
-            for (Materia m : materiasRaw) {
-                Map<String, Object> row = new HashMap<>();
-                row.put("id",          m.getId());
-                row.put("nombre",      m.getNombre());
-                row.put("codigo",      m.getCodigo());
-                row.put("descripcion", m.getDescripcion());
-                materias.add(row);
+            Integer profileId = getSessionProfileId(req);
+            if (profileId == null) {
+                res.redirect("/dashboard?error=Solo los profesores pueden acceder a esta sección.");
+                return null;
             }
+
+            Profesor profesor = Profesor.findById(profileId);
+            if (profesor == null) {
+                res.redirect("/dashboard?error=Profesor no encontrado.");
+                return null;
+            }
+
+            // Obtener la carrera del profesor
+            Integer carreraId = profesor.getInteger("carrera_id");
+
+            // Traer solo las materias de esa carrera
+            List<Materia> materias = Materia.find(
+                "id IN (SELECT materia_id FROM carrera_materias WHERE carrera_id = ?)", carreraId
+            );
+
+            Map<String, Object> model = new HashMap<>();
             model.put("materias", materias);
+            model.put("profesor", profesor);
+
             String err = req.queryParams("error");
             String ok  = req.queryParams("message");
             if (err != null && !err.isEmpty()) model.put("error", err);
             if (ok  != null && !ok.isEmpty())  model.put("successMessage", ok);
+
             return new ModelAndView(model, "materiasList.mustache");
         }, new MustacheTemplateEngine());
+
 
         get("/materia/editar/:id", (req, res) -> {
             int id = Integer.parseInt(req.params(":id"));
@@ -1393,26 +1434,24 @@ public class App {
             }
 
             Map<String, Object> model = new HashMap<>();
-            model.put("materiaId",     materia.getId());
+            model.put("materiaId", materia.getId());
             model.put("materiaNombre", materia.getNombre());
             model.put("materiaCodigo", materia.getCodigo());
 
-            // Construir la lista de todos los alumnos enriquecida con la nota actual.
-            // Para cada alumno buscamos su fila en alumnos_materias; si no existe la nota
-            // es null y se muestra el campo vacío en el formulario.
-            List<Alumno> todosLosAlumnos = Alumno.findAll();
+            // Traer solo los alumnos inscriptos en esta materia
+            List<AlumnoMateria> inscripciones = AlumnoMateria.where("materia_id = ?", materiaId);
             List<Map<String, Object>> filas = new ArrayList<>();
-            for (Alumno a : todosLosAlumnos) {
-                Map<String, Object> fila = new HashMap<>();
-                fila.put("alumnoId",        a.getId());
-                fila.put("alumnoNombre",    a.getNombre());
-                fila.put("alumnoApellido",  a.getApellido());
 
-                AlumnoMateria am = AlumnoMateria.findByAlumnoIdAndMateriaId(
-                        ((Number) a.getId()).intValue(), materiaId);
-                fila.put("nota", am != null && am.getNota() != null
-                        ? am.getNota().toString() : "");
-                filas.add(fila);
+            for (AlumnoMateria am : inscripciones) {
+                Alumno a = Alumno.findById(am.getAlumnoId());
+                if (a != null) {
+                    Map<String, Object> fila = new HashMap<>();
+                    fila.put("alumnoId", a.getId());
+                    fila.put("alumnoNombre", a.getNombre());
+                    fila.put("alumnoApellido", a.getApellido());
+                    fila.put("nota", am.getNota() != null ? am.getNota().toString() : "");
+                    filas.add(fila);
+                }
             }
             model.put("alumnos", filas);
 
@@ -1423,6 +1462,7 @@ public class App {
 
             return new ModelAndView(model, "notasForm.mustache");
         }, new MustacheTemplateEngine());
+
 
         // GUARDAR NOTAS — procesa el formulario de carga de notas.
         // POST /materia/:id/notas
@@ -1437,59 +1477,36 @@ public class App {
                 return null;
             }
 
-            List<Alumno> todosLosAlumnos = Alumno.findAll();
+            List<AlumnoMateria> inscripciones = AlumnoMateria.where("materia_id = ?", materiaId);
             List<String> errores = new ArrayList<>();
 
-            for (Alumno a : todosLosAlumnos) {
-                int alumnoId = ((Number) a.getId()).intValue();
+            for (AlumnoMateria am : inscripciones) {
+                int alumnoId = am.getAlumnoId();
                 String campo = req.queryParams("nota_" + alumnoId);
 
-                // Campo vacío → guardar o mantener null (nota no cargada)
                 if (campo == null || campo.trim().isEmpty()) {
-                    // Solo actualizamos si ya existe la fila; si no existe no la creamos vacía
-                    AlumnoMateria am = AlumnoMateria.findByAlumnoIdAndMateriaId(alumnoId, materiaId);
-                    if (am != null) {
-                        am.setNota(null);
-                        am.saveIt();
-                    }
+                    am.setNota(null);
+                    am.saveIt();
                     continue;
                 }
 
-                // Validar que sea numérico y esté en rango 0-10
                 double nota;
                 try {
                     nota = Double.parseDouble(campo.trim().replace(",", "."));
                 } catch (NumberFormatException ex) {
-                    errores.add(a.getNombre() + " " + a.getApellido()
-                            + ": la nota debe ser un numero.");
+                    errores.add("Alumno ID " + alumnoId + ": la nota debe ser un número.");
                     continue;
                 }
                 if (nota < 0 || nota > 10) {
-                    errores.add(a.getNombre() + " " + a.getApellido()
-                            + ": la nota debe estar entre 0 y 10.");
+                    errores.add("Alumno ID " + alumnoId + ": la nota debe estar entre 0 y 10.");
                     continue;
                 }
 
-                // Upsert: actualizar si existe, insertar si no
-                try {
-                    AlumnoMateria am = AlumnoMateria.findByAlumnoIdAndMateriaId(alumnoId, materiaId);
-                    if (am == null) {
-                        am = new AlumnoMateria();
-                        am.setAlumnoId(alumnoId);
-                        am.setMateriaId(materiaId);
-                    }
-                    am.setNota(nota);
-                    am.saveIt();
-                } catch (Exception ex) {
-                    System.err.println("ERROR al guardar nota alumno " + alumnoId
-                            + " materia " + materiaId + ": " + ex.getMessage());
-                    errores.add(a.getNombre() + " " + a.getApellido()
-                            + ": error interno al guardar.");
-                }
+                am.setNota(nota);
+                am.saveIt();
             }
 
             if (!errores.isEmpty()) {
-                // Codificar los errores como un único mensaje separado por " | "
                 String mensajeError = String.join(" | ", errores);
                 res.redirect("/materia/" + materiaId + "/notas?error="
                         + java.net.URLEncoder.encode(mensajeError, "UTF-8"));
@@ -1531,10 +1548,16 @@ public class App {
                 model.put("periodoFin",    periodo.getFechaFin());
             }
 
-            // Construir lista de todas las materias marcando las ya inscriptas
-            List<Materia> todasLasMaterias = Materia.findAll();
+            // Obtener la carrera del alumno
+            Integer carreraId = alumno.getInteger("carrera_id");
+
+            // Traer solo las materias de esa carrera
+            List<Materia> materiasDeCarrera = Materia.find(
+                "id IN (SELECT materia_id FROM carrera_materias WHERE carrera_id = ?)", carreraId
+            );
+
             List<Map<String, Object>> materias = new ArrayList<>();
-            for (Materia m : todasLasMaterias) {
+            for (Materia m : materiasDeCarrera) {
                 Map<String, Object> row = new HashMap<>();
                 row.put("id",          m.getId());
                 row.put("nombre",      m.getNombre());
@@ -2013,9 +2036,17 @@ public class App {
         get("/profesor/:id/materias", (req, res) -> {
             int profesorId = Integer.parseInt(req.params(":id"));
             Profesor profesor = Profesor.findById(profesorId);
+            if (profesor == null) {
+                res.redirect("/dashboard?error=Profesor no encontrado.");
+                return null;
+            }
 
+            // Obtener la carrera del profesor
+            Integer carreraId = profesor.getInteger("carrera_id");
+
+            // Traer solo las materias de esa carrera
             List<Materia> materias = Materia.find(
-                "id IN (SELECT materia_id FROM profesor_materias WHERE profesor_id = ?)", profesorId
+                "id IN (SELECT materia_id FROM carrera_materias WHERE carrera_id = ?)", carreraId
             );
 
             Map<String, Object> model = new HashMap<>();
@@ -2024,6 +2055,12 @@ public class App {
 
             return new ModelAndView(model, "profesorMaterias.mustache");
         }, new MustacheTemplateEngine());
+
+
+        
+        
+        
+        System.out.println(BCrypt.hashpw("user", BCrypt.gensalt()));
 
 
     } // fin main()

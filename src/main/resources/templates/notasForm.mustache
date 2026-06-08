@@ -82,16 +82,16 @@
 
             </div>
 
-            {{#alumnos}}
-            <!-- Solo mostrar el botón si hay alumnos -->
+            {{#alumnos.0}}
+            <!-- Mostrar el botón solo si existe al menos un alumno -->
             <div class="mt-6 flex justify-end">
                 <button type="submit"
                         class="bg-violet-600 text-white px-8 py-3 rounded-xl
-                               hover:bg-violet-700 font-semibold transition shadow-sm">
+                            hover:bg-violet-700 font-semibold transition shadow-sm">
                     Guardar Notas
                 </button>
             </div>
-            {{/alumnos}}
+            {{/alumnos.0}}
 
         </form>
 
